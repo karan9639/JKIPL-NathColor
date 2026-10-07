@@ -53,7 +53,7 @@ export default function TrackerPage() {
   const query = useQuery({ queryKey: ['tracker'], queryFn: api.tracker })
   return (
     <>
-      <PageHeader title="Job Card Tracker" description="Timestamp of every stage per job card, with elapsed time since opening." />
+      <PageHeader title="Order Tracker" description="Timestamp of every stage per job card, with elapsed time since opening." />
       <DataTable rows={query.data ?? []} columns={columns} isLoading={query.isLoading} error={query.error ? errorMessage(query.error) : null} onRetry={() => query.refetch()} exportName="job-card-tracker" />
     </>
   )
