@@ -1,0 +1,56 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --color-background: #f6f7f4;
+  --color-surface: #ffffff;
+  --color-foreground: #17201a;
+  --color-muted: #eef0ea;
+  --color-muted-foreground: #5d6a60;
+  --color-border: #dde2d8;
+
+  --color-primary: #14532d;
+  --color-primary-hover: #0f3f22;
+  --color-primary-foreground: #ffffff;
+  --color-primary-soft: #e3efe6;
+
+  --color-accent: #b45309;
+  --color-accent-soft: #fdf1e2;
+
+  --color-danger: #b91c1c;
+  --color-danger-soft: #fdeaea;
+  --color-success: #15803d;
+  --color-success-soft: #e5f4ea;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-primary;
+  }
+  input,
+  select,
+  textarea {
+    @apply text-base sm:text-sm;
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+}
