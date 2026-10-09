@@ -1,12 +1,12 @@
 import { zipSync } from 'fflate'
 import type { Row } from './utils'
 
-export async function exportRowsToXlsx(rows: Row[], keys: string[], name: string) {
+export async function exportRowsToXlsx(rows: Row[], keys: string[], name: string, sheetName = 'Data') {
   const XLSX = await import('xlsx')
   const data = rows.map((r) => Object.fromEntries(keys.map((k) => [k, r[k] ?? ''])))
   const sheet = XLSX.utils.json_to_sheet(data, { header: keys })
   const book = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(book, sheet, 'Data')
+  XLSX.utils.book_append_sheet(book, sheet, sheetName)
   const stamp = new Date().toISOString().slice(0, 10)
   XLSX.writeFile(book, `${name}-${stamp}.xlsx`)
 }
@@ -17,10 +17,10 @@ export async function readWorkbook(file: File) {
   const book = XLSX.read(buffer, { type: 'array', cellDates: false })
   return {
     sheetNames: book.SheetNames,
-    sheetRows(name?: string): unknown[][] {
+    sheetRows(name?: string, raw = false): unknown[][] {
       const sheet = book.Sheets[name ?? book.SheetNames[0]]
       if (!sheet) return []
-      return XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false, defval: '' })
+      return XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw, defval: '' })
     },
     sheetObjects(name: string): Row[] | null {
       const sheet = book.Sheets[name]

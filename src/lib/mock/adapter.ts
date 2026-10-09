@@ -95,6 +95,78 @@ export const mockAdapter: AxiosAdapter = async (cfg) => {
       return respond(cfg, { message: `Job card ${body.jobcardno} updated successfully`, status: 'success' })
     case 'get /production_stages':
       return respond(cfg, data.productionStages)
+    case 'get /knitting/po-lines':
+      return respond(cfg, data.knittingPOLines)
+    case 'post /knitting/po/import': {
+      const rows = Array.isArray(body.rows) ? body.rows as Record<string, unknown>[] : []
+      let inserted = 0
+      let updated = 0
+      const error_rows: Record<string, unknown>[] = []
+      for (const row of rows) {
+        const key = `${row.SOURCE_FILE}|${row.SOURCE_SHEET}|${row.SOURCE_ROW_NUMBER}`
+        const index = data.knittingPOLines.findIndex((line) => `${line.SOURCE_FILE}|${line.SOURCE_SHEET}|${line.SOURCE_ROW_NUMBER}` === key)
+        if (index >= 0) {
+          const old = data.knittingPOLines[index]
+          if (old.PO_NUMBER !== row.PO_NUMBER || old.FABRIC_NAME !== row.FABRIC_NAME) {
+            error_rows.push({ SOURCE_ROW_NUMBER: row.SOURCE_ROW_NUMBER, error: 'PO number or fabric changed for this source row; reconcile before updating.' })
+            continue
+          }
+          data.knittingPOLines[index] = { ...old, ...row }
+          updated++
+        } else {
+          data.knittingPOLines.push({ ...row, PO_LINE_ID: `KL-IMPORT-${data.knittingPOLines.length + 1}`, PRODUCED_KGS: 0, KNITTING_STATUS: 'PLANNED', KNITTING_COMPLETED_AT: '', LINKED_JOB_CARDS: [] })
+          inserted++
+        }
+      }
+      return respond(cfg, { message: 'Demo PO import completed', inserted, updated, error_rows })
+    }
+    case 'post /knitting/entries': {
+      const items = Array.isArray(body.rows) ? body.rows as Record<string, unknown>[] : [body]
+      let inserted = 0
+      let updated = 0
+      const error_rows: Record<string, unknown>[] = []
+      for (const item of items) {
+        const id = String(item.PO_LINE_ID ?? item.po_line_id ?? '')
+        const eventId = String(item.PRODUCTION_EVENT_ID ?? item.production_event_id ?? '')
+        const status = String(item.STATUS ?? item.status ?? '').toUpperCase()
+        const completedAt = String(item.COMPLETED_AT ?? item.completed_at ?? '')
+        const kg = Number(item.PRODUCED_KGS ?? item.produced_kgs ?? 0)
+        const line = data.knittingPOLines.find((p) => p.PO_LINE_ID === id)
+        if (!line || !eventId || !Number.isFinite(kg) || kg < 0 || (status === 'COMPLETED' && !completedAt)) {
+          error_rows.push({ PO_LINE_ID: id, PRODUCTION_EVENT_ID: eventId, error: 'Invalid production event, unknown line, or missing completion time' })
+          continue
+        }
+        const existing = data.knittingEvents.findIndex((event) => event.PRODUCTION_EVENT_ID === eventId)
+        if (existing >= 0) {
+          if (data.knittingEvents[existing].PO_LINE_ID !== id) {
+            error_rows.push({ PO_LINE_ID: id, PRODUCTION_EVENT_ID: eventId, error: 'Event ID belongs to another PO line' })
+            continue
+          }
+          data.knittingEvents[existing] = { ...item, PO_LINE_ID: id, PRODUCTION_EVENT_ID: eventId, PRODUCED_KGS: kg, STATUS: status, COMPLETED_AT: completedAt }
+          updated++
+        } else {
+          data.knittingEvents.push({ ...item, PO_LINE_ID: id, PRODUCTION_EVENT_ID: eventId, PRODUCED_KGS: kg, STATUS: status, COMPLETED_AT: completedAt })
+          inserted++
+        }
+        // Recalculate from the event collection plus the pre-seeded demo balance.
+        const baseQty = id === 'KL-DEMO-001' ? 250 : id === 'KL-DEMO-003' ? 108 : 0
+        line.PRODUCED_KGS = baseQty + data.knittingEvents.filter((event) => event.PO_LINE_ID === id).reduce((sum, event) => sum + Number(event.PRODUCED_KGS ?? 0), 0)
+        line.KNITTING_STATUS = status
+        line.KNITTING_COMPLETED_AT = status === 'COMPLETED' ? completedAt : ''
+      }
+      if (!Array.isArray(body.rows) && error_rows.length) return respond(cfg, { message: String(error_rows[0].error) }, 400)
+      return respond(cfg, { message: 'Knitting event saved (demo only)', inserted, updated, error_rows })
+    }
+    case 'post /knitting/jobcards/link': {
+      const line = data.knittingPOLines.find((p) => p.PO_LINE_ID === body.po_line_id)
+      const card = data.tracker.find((r) => String(r.JOBCARDNO) === String(body.jobcardno) && String(r.ORDERID) === String(body.order_id))
+      if (!line || !card) return respond(cfg, { message: 'PO line or ERP OrderID/Job Card does not match' }, 400)
+      const links = (line.LINKED_JOB_CARDS as Record<string, unknown>[]) ?? []
+      if (!links.some((r) => String(r.JOBCARDNO) === String(body.jobcardno))) {
+        line.LINKED_JOB_CARDS = [...links, { JOBCARDNO: String(body.jobcardno), ORDERID: String(body.order_id), MANUALLOTNO: String(body.manual_lot_no ?? '') }]
+      }
+      return respond(cfg, { message: 'Job card linked (demo only)' })
+    }
     case 'get /vtracker':
       return respond(cfg, data.tracker)
     case 'get /vrecords':

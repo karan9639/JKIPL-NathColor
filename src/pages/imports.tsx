@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useParams } from 'react-router'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { ClipboardPaste, FileUp, Upload } from 'lucide-react'
 import { api } from '@/lib/services'
 import { errorMessage } from '@/lib/api'
-import { chunk, parseClipboardTable, readHtmlTables, readWorkbook, toIsoDate, zipFile } from '@/lib/spreadsheet'
+import { chunk, exportRowsToXlsx, parseClipboardTable, readHtmlTables, readWorkbook, toIsoDate, zipFile } from '@/lib/spreadsheet'
+import { COMPLETION_TEMPLATE, normalizeCompletionSheet, normalizePlanningSheet } from '@/lib/knitting'
 import { humanizeKey, type Row } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Field, Textarea } from '@/components/ui/field'
@@ -23,6 +24,8 @@ interface ImportDef {
   sheet?: string
   extra?: Record<string, unknown>
   chunkSize?: number
+  requiredSheet?: boolean
+  knittingFormat?: 'planning' | 'completion'
 }
 
 const IMPORTS: Record<string, ImportDef> = {
@@ -35,6 +38,8 @@ const IMPORTS: Record<string, ImportDef> = {
   dispatch: { title: 'Import Dispatch / Billing', description: 'Upload the dispatch register HTML export from the ERP.', source: 'html', endpoint: '/insertDispatch', accept: '.html,.htm,.xls', chunkSize: 500 },
   'orders-book': { title: 'Import Orders Book', description: 'Upload the order book export. The file is compressed before upload.', source: 'zip', endpoint: '/upload_orders', accept: '.html,.htm,.xls,.xlsx' },
   recipes: { title: 'Import Recipes', description: 'Upload the recipe workbook. Rows are read from the MIX sheet.', source: 'xlsx', endpoint: '/upload-recipe', accept: '.xlsx,.xls', sheet: 'MIX' },
+  'knitting-po-planning': { title: 'Import Knitting PO Planner', description: 'Upload UNIT-3 PLANNER 2026 or another workbook with the consolidated PO sheet. This is planning data, not proof of knitting completion.', source: 'xlsx', endpoint: '/knitting/po/import', accept: '.xlsx,.xls', sheet: 'PO', requiredSheet: true, knittingFormat: 'planning', chunkSize: 200 },
+  'knitting-completion': { title: 'Import Knitting Completion', description: 'Upload actual production events using PO_LINE_ID and unique PRODUCTION_EVENT_ID. Reimporting the same event ID must not double-count KG.', source: 'xlsx', endpoint: '/knitting/entries', accept: '.xlsx,.xls', sheet: 'KNITTING_COMPLETION', requiredSheet: true, knittingFormat: 'completion', chunkSize: 200 },
 }
 
 function tableToRows(table: unknown[][]): Row[] {
@@ -69,6 +74,7 @@ export default function ImportsRouter() {
 }
 
 function ImportPage({ def }: { def: ImportDef }) {
+  const queryClient = useQueryClient()
   const [paste, setPaste] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [rows, setRows] = useState<Row[]>([])
@@ -89,11 +95,18 @@ function ImportPage({ def }: { def: ImportDef }) {
         setRows(tableToRows(largest))
       } else {
         const book = await readWorkbook(f)
+        if (def.requiredSheet && def.sheet && !book.sheetNames.includes(def.sheet)) {
+          throw new Error(`Required worksheet "${def.sheet}" not found. Available sheets: ${book.sheetNames.slice(0, 8).join(', ')}`)
+        }
         const sheet = def.sheet && book.sheetNames.includes(def.sheet) ? def.sheet : book.sheetNames[0]
         if (def.sheet && sheet !== def.sheet) toast.warning(`Sheet "${def.sheet}" not found, using "${sheet}"`)
-        setRows(tableToRows(book.sheetRows(sheet)))
+        const table = book.sheetRows(sheet, !!def.knittingFormat)
+        setRows(def.knittingFormat === 'planning' ? normalizePlanningSheet(table, f.name)
+          : def.knittingFormat === 'completion' ? normalizeCompletionSheet(table)
+          : tableToRows(table))
       }
     } catch (e) {
+      setRows([])
       toast.error(`Could not read file: ${errorMessage(e)}`)
     } finally {
       setParsing(false)
@@ -110,7 +123,7 @@ function ImportPage({ def }: { def: ImportDef }) {
       const totals: Row = {}
       setProgress({ done: 0, total: batches.length })
       for (const [i, batch] of batches.entries()) {
-        const res = (await api.postRows(def.endpoint, batch, def.extra)) as Row
+        const res = (await api.postRows(def.endpoint, batch, { ...def.extra, ...(def.knittingFormat ? { source: 'excel', source_filename: file?.name ?? '' } : {}) })) as Row
         for (const [k, v] of Object.entries(res ?? {})) {
           totals[k] = typeof v === 'number' ? Number(totals[k] ?? 0) + v : Array.isArray(v) ? [...((totals[k] as unknown[]) ?? []), ...v] : v
         }
@@ -121,6 +134,10 @@ function ImportPage({ def }: { def: ImportDef }) {
     onSuccess: (res) => {
       setResult(res)
       toast.success(String(res?.message ?? 'Import complete'))
+      if (def.knittingFormat) {
+        void queryClient.invalidateQueries({ queryKey: ['knitting-po-lines'] })
+        void queryClient.invalidateQueries({ queryKey: ['tracker'] })
+      }
     },
     onError: (e) => toast.error(errorMessage(e)),
     onSettled: () => setProgress(null),
@@ -133,6 +150,18 @@ function ImportPage({ def }: { def: ImportDef }) {
   return (
     <>
       <PageHeader title={def.title} description={def.description} />
+      {def.knittingFormat && (
+        <div className="rounded-md border border-border bg-surface px-4 py-3 text-sm text-muted-foreground">
+          {def.knittingFormat === 'planning' ? (
+            <p>Reads only the <strong>PO</strong> worksheet. Identical fabric names under one PO remain separate source rows. SOURCE_FILE + SOURCE_SHEET + SOURCE_ROW_NUMBER are passed to the backend for reconciliation; manually verify changed/reordered source rows.</p>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p>Use stable <strong>PRODUCTION_EVENT_ID</strong> values for idempotent uploads. <strong>PO_LINE_ID</strong> comes from the PO tracker export.</p>
+              <Button size="sm" variant="outline" onClick={() => void exportRowsToXlsx(COMPLETION_TEMPLATE, Object.keys(COMPLETION_TEMPLATE[0]), 'knitting-completion-template', 'KNITTING_COMPLETION')}>Download blank template</Button>
+            </div>
+          )}
+        </div>
+      )}
 
       <Panel>
         <PanelHeader title={def.source === 'paste' ? '1. Paste data' : '1. Choose file'} />
@@ -180,7 +209,7 @@ function ImportPage({ def }: { def: ImportDef }) {
       </Panel>
 
       {(rows.length > 0 || parsing) && (
-        <DataTable rows={rows} columns={columns} isLoading={parsing} title="2. Preview" description={`${rows.length} rows parsed${columns.length === 12 ? ' · first 12 columns shown' : ''}`} searchable={false} />
+        <DataTable rows={def.knittingFormat ? rows.slice(0, 100) : rows} columns={columns} isLoading={parsing} title="2. Preview" description={`${rows.length} rows parsed${def.knittingFormat && rows.length > 100 ? ' · first 100 rows previewed' : ''}${columns.length === 12 ? ' · first 12 columns shown' : ''}`} searchable={false} />
       )}
 
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">

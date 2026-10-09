@@ -93,6 +93,8 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Imports',
     items: [
+      { title: 'Knitting PO Planner', path: '/imports/knitting-po-planning', icon: FileUp, description: 'Import the PO worksheet from Unit-3 planner', allowedUsers: ['ap', 'shubham', 'gagan'] },
+      { title: 'Knitting Completion', path: '/imports/knitting-completion', icon: FileUp, description: 'Import actual knitting production entries', allowedUsers: ['ap', 'shubham', 'gagan'] },
       { title: 'Dyeing Programs', path: '/imports/dyeing-programs', icon: FileUp, description: 'Paste greige requisitions from Excel', allowedUsers: ['dilip', 'ap'] },
       { title: 'Job Cards Opening', path: '/imports/job-cards-opening', icon: FileUp, description: 'ERP job card HTML export', allowedUsers: ['ankush', 'bharat', 'sunil', 'shubham', 'ap'] },
       { title: 'Job Cards Closing', path: '/imports/job-cards-closing', icon: FileUp, description: 'Closed job cards export', allowedUsers: ['ap', 'shubham', 'prabhakar'] },

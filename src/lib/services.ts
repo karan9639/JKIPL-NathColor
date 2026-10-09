@@ -1,6 +1,7 @@
 import { http } from './api'
 import { session } from './session'
 import { asRows, type Row } from './utils'
+import type { KnittingEntry, KnittingJobCardLink } from './knitting'
 
 export interface LoginPayload {
   username: string
@@ -130,6 +131,22 @@ export const api = {
   async tracker() {
     const { data } = await http.get('/vtracker')
     return asRows(data)
+  },
+
+  // These endpoints must be added to nath-api. They do not replace /vtracker.
+  async knittingPOLines() {
+    const { data } = await http.get('/knitting/po-lines')
+    return asRows(data)
+  },
+
+  async createKnittingEntry(payload: KnittingEntry) {
+    const { data } = await http.post('/knitting/entries', { ...payload, username: username() })
+    return data as Row
+  },
+
+  async linkKnittingJobCard(payload: KnittingJobCardLink) {
+    const { data } = await http.post('/knitting/jobcards/link', { ...payload, username: username() })
+    return data as Row
   },
 
   async records() {

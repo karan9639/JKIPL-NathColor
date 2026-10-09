@@ -157,6 +157,7 @@ const jobCards: Row[] = Array.from({ length: 60 }, (_, i) => {
   const base = dayOffset(int(0, 12))
   const stage = int(0, 5)
   return {
+    ORDERID: 24000 + i,
     JOBCARDNO: 81000 + i,
     MANUALLOTNO: `ML-${int(100, 999)}`,
     JOBCARDDATE: iso(base),
@@ -204,6 +205,7 @@ export const productionStages: Row[] = jobCards
   }))
 
 export const tracker: Row[] = jobCards.map((j) => ({
+  ORDERID: j.ORDERID,
   JOBCARDNO: j.JOBCARDNO,
   MANUALLOTNO: j.MANUALLOTNO,
   JETNO: j.JETNO,
@@ -218,6 +220,15 @@ export const tracker: Row[] = jobCards.map((j) => ({
   JOBCARDCLOSEDTIME: j.JOBCARDCLOSEDTIME,
   INVOICE_DATE: j.INVOICE_DATE,
 }))
+
+// Mock-only sample PO lines; not real manufacturing or planner completion data.
+export const knittingPOLines: Row[] = [
+  { PO_LINE_ID: 'KL-DEMO-001', PO_NUMBER: 'PO-DEMO-001', PO_DATE: iso(dayOffset(9)), FABRIC_NAME: 'DEMO SPACER FABRIC', REQUIRED_KGS: 520, PLANNED_KGS: 540, PRODUCED_KGS: 250, PLANNED_MACHINE: '4', EXPECTED_DELIVERY_DATE: iso(dayOffset(1)), KNITTING_STATUS: 'PARTIAL', KNITTING_COMPLETED_AT: '', LINKED_JOB_CARDS: [{ JOBCARDNO: String(tracker[0].JOBCARDNO), ORDERID: String(tracker[0].ORDERID) }] },
+  { PO_LINE_ID: 'KL-DEMO-002', PO_NUMBER: 'PO-DEMO-002', PO_DATE: iso(dayOffset(6)), FABRIC_NAME: 'DEMO MESH FABRIC', REQUIRED_KGS: 300, PLANNED_KGS: 324, PRODUCED_KGS: 0, PLANNED_MACHINE: '17', EXPECTED_DELIVERY_DATE: iso(dayOffset(-1)), KNITTING_STATUS: 'PLANNED', KNITTING_COMPLETED_AT: '', LINKED_JOB_CARDS: [] },
+  { PO_LINE_ID: 'KL-DEMO-003', PO_NUMBER: 'PO-DEMO-003', PO_DATE: iso(dayOffset(12)), FABRIC_NAME: 'DEMO TRICOT FABRIC', REQUIRED_KGS: 100, PLANNED_KGS: 108, PRODUCED_KGS: 108, PLANNED_MACHINE: '22', EXPECTED_DELIVERY_DATE: iso(dayOffset(2)), KNITTING_STATUS: 'COMPLETED', KNITTING_COMPLETED_AT: stamp(dayOffset(4)), LINKED_JOB_CARDS: [{ JOBCARDNO: String(tracker[1].JOBCARDNO), ORDERID: String(tracker[1].ORDERID) }] },
+]
+
+export const knittingEvents: Row[] = []
 
 export const records: Row[] = Array.from({ length: 14 }, (_, i) => ({
   Date: iso(dayOffset(i)),
