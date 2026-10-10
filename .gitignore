@@ -1,3 +1,4 @@
+
 # v0 sandbox internal files
 __v0_runtime_loader.js
 __v0_devtools.tsx
@@ -8,9 +9,11 @@ __v0_jsx-dev-runtime.ts
 .vercel/
 
 # Environment variables
+.env
+.env.*
 .env*.local
 
 # Common ignores
-node_modules
+node_modules/
 .next/
 .DS_Store
