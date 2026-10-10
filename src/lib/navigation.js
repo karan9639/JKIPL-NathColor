@@ -71,11 +71,7 @@ export const NAV_GROUPS = [
     },
 ];
 export const ALL_NAV_ITEMS = NAV_GROUPS.flatMap((g) => g.items.map((item) => ({ ...item, group: g.label })));
-export function canAccess(item, username) {
-    if (!item.allowedUsers)
-        return true;
-    return item.allowedUsers.includes(username.toLowerCase());
-}
+export { canAccess } from './permissions';
 export function findNavItem(pathname) {
     return ALL_NAV_ITEMS.find((item) => item.path === pathname);
 }

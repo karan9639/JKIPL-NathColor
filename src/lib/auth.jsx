@@ -6,66 +6,72 @@ import { setUnauthorizedHandler } from './api';
 import { loginUser, logoutUser } from '@/services/authAPI';
 import { session } from './session';
 import { canAccess } from './navigation';
+import { isSuccessfulLoginResponse, userFromLoginResponse } from './identity';
+
 const AuthContext = createContext(null);
+
 export function AuthProvider({ children }) {
     const queryClient = useQueryClient();
     const dispatch = useDispatch();
-    const { username, isLoggingOut } = useSelector((state) => state.auth);
+    const { username, user, isLoggingOut } = useSelector((state) => state.auth);
+
     const logout = useCallback(async () => {
         dispatch(logoutStarted());
         try {
-            // Call the backend logout endpoint, but always clear the local session.
             await logoutUser();
-        }
-        catch {
-            // A network/API failure must not leave the user signed in locally.
-        }
-        finally {
+        } catch {
+            // Still clear the local session if the network/API is unavailable.
+        } finally {
             session.clear();
             queryClient.clear();
             dispatch(signedOut());
         }
     }, [queryClient, dispatch]);
+
     useEffect(() => {
-        // Remove the identifier saved by older device-based login versions.
         localStorage.removeItem('nc.device_uuid');
         setUnauthorizedHandler(logout);
+        return () => setUnauthorizedHandler(null);
     }, [logout]);
+
     const login = useCallback(async (userEmail, password, remember) => {
         const email = userEmail.trim().toLowerCase();
         const { data: response } = await loginUser({ email, password });
-        // `response` is the backend response body (Axios has already unwrapped its own response).
-        // Do not replace it with response.data: the backend nests the user there and
-        // keeps `success: true` at the top level.
-        const responseStatus = String(response?.status ?? '').toLowerCase();
-        const isSuccess = response?.success === true ||
-            Boolean(response?.token || response?.accessToken || response?.user?.token || response?.user?.accessToken) ||
-            responseStatus === 'passed' ||
-            responseStatus === 'success' ||
-            responseStatus === 'successful';
+        // Axios has already removed its HTTP wrapper. The backend's payload
+        // is { statusCode, success, data: { foundUser: { role, email, ... } } }.
+        const isSuccess = isSuccessfulLoginResponse(response);
         if (!isSuccess) {
-            throw new Error(response?.message ?? 'Invalid username or password.');
+            throw new Error(response?.message ?? 'Invalid email or password.');
         }
-        const token = response.token ?? response.accessToken ?? response.data?.token ?? response.data?.accessToken ?? null;
+
+        const account = userFromLoginResponse(response, email);
+        const token = response.token ?? response.accessToken ??
+            response.data?.token ?? response.data?.accessToken ?? null;
         const menuOptions = response.menuoptionslist ?? response.data?.menuoptionslist ?? '';
-        const authenticatedUsername = response.data?.foundUser?.email ?? response.user?.username ?? email;
-        session.save(token, authenticatedUsername, menuOptions);
+
+        session.save(token, account.username, menuOptions, account);
         session.setRememberedUsername(remember ? email : null);
-        dispatch(signedIn(authenticatedUsername));
-    }, [dispatch]);
+        queryClient.clear(); // Clear any data from the previously logged-in account.
+        dispatch(signedIn({ username: account.username, user: account }));
+    }, [dispatch, queryClient]);
+
     const value = useMemo(() => ({
         username,
+        user,
+        role: user?.role ?? '',
+        isAdmin: user?.role === 'admin',
         isLoggingOut,
-        isAuthenticated: !!username,
+        isAuthenticated: Boolean(username),
         login,
         logout,
-        can: (item) => canAccess(item, username),
-    }), [username, isLoggingOut, login, logout]);
+        can: (item) => canAccess(item, user ?? username),
+    }), [username, user, isLoggingOut, login, logout]);
+
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
+
 export function useAuth() {
-    const ctx = useContext(AuthContext);
-    if (!ctx)
-        throw new Error('useAuth must be used inside AuthProvider');
-    return ctx;
+    const context = useContext(AuthContext);
+    if (!context) throw new Error('useAuth must be used inside AuthProvider');
+    return context;
 }

@@ -24,14 +24,15 @@ function freshness(value) {
     return { label: `${Math.floor(hours / 24)}d old`, tone: 'danger' };
 }
 export default function DashboardPage() {
-    const { username, can } = useAuth();
+    const { username, user, can } = useAuth();
     const records = useQuery({ queryKey: ['records'], queryFn: api.records });
     const lud = useQuery({ queryKey: ['lud'], queryFn: api.lud });
     const rows = [...(records.data ?? [])].sort((a, b) => String(a.Date).localeCompare(String(b.Date)));
     const latest = rows.at(-1);
     const chartData = rows.slice(-10).map((r) => ({ ...r, label: formatDate(r.Date).slice(0, 6) }));
     const quickLinks = NAV_GROUPS.filter((g) => ['Orders', 'Production', 'Inventory'].includes(g.label)).flatMap((g) => g.items).filter(can).slice(0, 8);
-    const displayName = (username ?? '').split('@')[0].charAt(0).toUpperCase() + (username ?? '').split('@')[0].slice(1);
+    const shortName = (username ?? '').split('@')[0];
+    const displayName = user?.fullname || (shortName.charAt(0).toUpperCase() + shortName.slice(1));
     return (<>
 
 

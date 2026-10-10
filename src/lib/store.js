@@ -3,11 +3,23 @@ import { session } from './session';
 
 const authSlice = createSlice({
     name: 'auth',
-    initialState: { username: session.getUsername() || '', isLoggingOut: false },
+    initialState: {
+        username: session.getUsername(),
+        user: session.getUser(),
+        isLoggingOut: false,
+    },
     reducers: {
-        signedIn(state, action) { state.username = action.payload; },
+        signedIn(state, action) {
+            state.username = action.payload.username;
+            state.user = action.payload.user;
+            state.isLoggingOut = false;
+        },
         logoutStarted(state) { state.isLoggingOut = true; },
-        signedOut(state) { state.username = ''; state.isLoggingOut = false; },
+        signedOut(state) {
+            state.username = '';
+            state.user = null;
+            state.isLoggingOut = false;
+        },
     },
 });
 const uiSlice = createSlice({

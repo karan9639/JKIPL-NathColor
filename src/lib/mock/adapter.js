@@ -64,7 +64,7 @@ export const mockAdapter = async (cfg) => {
             return respond(cfg, {
                 success: true,
                 token: `mock.${email}.${Date.now()}`,
-                data: { foundUser: { email }, menuoptionslist: '' },
+                data: { foundUser: { email, fullname: email.split('@')[0], role: ['admin', 'ap'].includes(email.split('@')[0]) ? 'admin' : 'user' }, menuoptionslist: '' },
                 message: 'Demo login successful',
             });
         }

@@ -44,12 +44,13 @@ function NavList({ onNavigate }) {
     </nav>);
 }
 function UserFooter() {
-    const { username } = useAuth();
+    const { username, user, role } = useAuth();
+    const displayName = user?.fullname || username;
     return (<div className="flex items-center gap-2 border-t border-border px-4 py-3">
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold uppercase">{username.slice(0, 2)}</span>
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold uppercase">{displayName.slice(0, 2)}</span>
       <div className="min-w-0 leading-tight">
-        <p className="truncate text-sm font-medium">{username}</p>
-        <p className="text-xs text-muted-foreground">{USE_MOCK_API ? 'Demo data' : 'Live'}</p>
+        <p className="truncate text-sm font-medium">{displayName}</p>
+        <p className="text-xs text-muted-foreground">{role ? `${role.charAt(0).toUpperCase()}${role.slice(1)} · ` : ''}{USE_MOCK_API ? 'Demo data' : 'Live'}</p>
       </div>
     </div>);
 }

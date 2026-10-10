@@ -107,7 +107,7 @@ export function LoginPage() {
           </Button>
 
           {USE_MOCK_API && (<p className="rounded-md bg-accent-soft px-3 py-2 text-xs text-accent">
-              Demo mode: sign in with any email (try <span className="font-mono font-medium">ap</span> for full access) and any password.
+              Demo mode: use <span className="font-mono font-medium">admin@example.com</span> for an admin view, and any password of at least 2 characters.
             </p>)}
         </form>
       </section>
