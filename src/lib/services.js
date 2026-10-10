@@ -76,6 +76,19 @@ export const api = {
         const { data } = await http.get('/vtracker');
         return asRows(data);
     },
+    // Additional PO/knitting endpoints. Requires matching nath-api backend routes.
+    async knittingPOLines() {
+        const { data } = await http.get('/knitting/po-lines');
+        return asRows(data);
+    },
+    async createKnittingEntry(payload) {
+        const { data } = await http.post('/knitting/entries', { ...payload, username: username() });
+        return data;
+    },
+    async linkKnittingJobCard(payload) {
+        const { data } = await http.post('/knitting/jobcards/link', { ...payload, username: username() });
+        return data;
+    },
     async records() {
         const { data } = await http.get('/vrecords');
         return asRows(data);

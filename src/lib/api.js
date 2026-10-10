@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { session } from './session';
+import { config } from './config';
 export class ApiError extends Error {
     status;
     constructor(message, status) {
@@ -7,9 +8,7 @@ export class ApiError extends Error {
         this.status = status;
     }
 }
-const apiBaseUrl = (import.meta.env.VITE_PUBLIC_API_BASE_URL ?? '').trim().replace(/\/+$/, '');
-const useMockApi = import.meta.env.VITE_USE_MOCK_API === 'true' || apiBaseUrl === '';
-const timeoutMs = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 60000);
+const { apiBaseUrl, useMockApi, timeoutMs } = config;
 let mockAdapter = null;
 async function getMockAdapter() {
     if (!mockAdapter) {
@@ -21,6 +20,7 @@ async function getMockAdapter() {
 export const http = axios.create({
     baseURL: useMockApi ? '/mock-api' : apiBaseUrl,
     timeout: timeoutMs,
+    withCredentials: true,
     headers: { 'Content-Type': 'application/json' },
 });
 if (useMockApi) {

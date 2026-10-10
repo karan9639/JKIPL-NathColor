@@ -1,4 +1,5 @@
 import API from './axiosInstance';
-const loginUser = async (userData) => API.post('user/login', userData);
-const logoutUser = async () => API.post('user/logout');
-export { loginUser, logoutUser };
+
+// Leading slashes keep real and mock adapters consistent.
+export const loginUser = (credentials) => API.post('/user/login', credentials);
+export const logoutUser = () => API.post('/user/logout');
