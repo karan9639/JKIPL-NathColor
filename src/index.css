@@ -46,6 +46,22 @@
   font-variant-numeric: tabular-nums;
 }
 
+@layer base {
+  #root { min-height: 100dvh; }
+  main, section, form { min-width: 0; }
+  img, video { max-width: 100%; height: auto; }
+  button, a, input, select, textarea { touch-action: manipulation; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 @media print {
   .no-print {
     display: none !important;

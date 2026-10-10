@@ -1,26 +1,29 @@
+
 {
   "name": "nathcolor-plus",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@12.3.4",
+  "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --port 3000",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
-  },
+  "dev": "vite --host 0.0.0.0 --port 3000",
+  "check:javascript": "node scripts/check-javascript.js",
+  "build": "npm run check:javascript && vite build",
+  "preview": "vite preview"
+},
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
+    "@reduxjs/toolkit": "^2.13.0",
     "@tanstack/react-query": "^5.104.1",
     "axios": "^1.20.0",
     "clsx": "^2.1.1",
     "fflate": "^0.8.3",
     "lucide-react": "^1.16.0",
     "radix-ui": "^1.6.7",
-    "react": "^19",
-    "react-dom": "^19",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
     "react-hook-form": "^7.89.0",
-    "react-router": "^8.4.0",
+    "react-redux": "^9.3.0",
+    "react-router": "^7.18.1",
     "recharts": "^3.10.1",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.3.1",
@@ -28,14 +31,12 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@babel/core": "^7.29.7",
+    "@locator/babel-jsx": "^0.5.1",
+    "@rolldown/plugin-babel": "^0.2.4",
     "@tailwindcss/vite": "^4.3.3",
-    "@types/node": "^24",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.1.1",
     "tailwindcss": "^4.3.3",
-    "typescript": "5.7.3",
     "vite": "^8.3.2"
-  },
-  "type": "module"
+  }
 }
