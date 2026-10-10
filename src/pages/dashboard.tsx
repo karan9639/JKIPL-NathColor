@@ -33,10 +33,18 @@ export default function DashboardPage() {
   const chartData = rows.slice(-10).map((r) => ({ ...r, label: formatDate(r.Date).slice(0, 6) }))
 
   const quickLinks = NAV_GROUPS.filter((g) => ['Orders', 'Production', 'Inventory'].includes(g.label)).flatMap((g) => g.items).filter(can).slice(0, 8)
-
+  const displayName = (username ?? '').split('@')[0].charAt(0).toUpperCase() + (username ?? '').split('@')[0].slice(1)
   return (
     <>
-      <PageHeader title={`Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${username}`} description={latest ? `Production activity for ${formatDate(latest.Date)}` : 'Production activity overview'} />
+
+
+      <PageHeader
+        title={`Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'
+          }, ${displayName}`}
+        description={
+          latest ? `Production activity for ${formatDate(latest.Date)}` : 'Production activity overview'
+        }
+      />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
         {[

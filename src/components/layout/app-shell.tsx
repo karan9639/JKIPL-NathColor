@@ -2,11 +2,14 @@ import { useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router'
 import { LogOut, Menu, Palette } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
-import { config } from '@/lib/config'
 import { NAV_GROUPS, findNavItem } from '@/lib/navigation'
 import { cn } from '@/lib/utils'
 import { Sheet } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+
+const APP_NAME = 'Nathcolor+'
+const API_BASE_URL = (import.meta.env.VITE_PUBLIC_API_BASE_URL ?? '').trim()
+const USE_MOCK_API = import.meta.env.VITE_USE_MOCK_API === 'true' || API_BASE_URL === ''
 
 function Brand() {
   return (
@@ -15,7 +18,7 @@ function Brand() {
         <Palette className="size-4" aria-hidden="true" />
       </span>
       <div className="leading-tight">
-        <p className="text-sm font-semibold">{config.appName}</p>
+        <p className="text-sm font-semibold">{APP_NAME}</p>
         <p className="text-xs text-muted-foreground">Dyeing operations</p>
       </div>
     </div>
@@ -67,7 +70,7 @@ function UserFooter() {
         <span className="flex size-8 items-center justify-center rounded-full bg-muted text-xs font-semibold uppercase">{username.slice(0, 2)}</span>
         <div className="min-w-0 leading-tight">
           <p className="truncate text-sm font-medium">{username}</p>
-          <p className="text-xs text-muted-foreground">{config.useMockApi ? 'Demo data' : 'Live'}</p>
+          <p className="text-xs text-muted-foreground">{USE_MOCK_API ? 'Demo data' : 'Live'}</p>
         </div>
       </div>
       <Button variant="ghost" size="icon" onClick={logout} aria-label="Sign out" className="size-8">
@@ -101,11 +104,11 @@ export function AppShell() {
           <Button variant="ghost" size="icon" onClick={() => setOpen(true)} aria-label="Open navigation">
             <Menu aria-hidden="true" />
           </Button>
-          <p className="truncate text-sm font-semibold">{current?.title ?? config.appName}</p>
+          <p className="truncate text-sm font-semibold">{current?.title ?? APP_NAME}</p>
         </header>
-        {config.useMockApi && (
+        {USE_MOCK_API && (
           <div className="no-print border-b border-accent/20 bg-accent-soft px-4 py-1.5 text-center text-xs text-accent">
-            Demo mode — showing sample data. Set <code className="font-mono">VITE_API_BASE_URL</code> to connect to the live server.
+            Demo mode — showing sample data. Set <code className="font-mono">VITE_PUBLIC_API_BASE_URL</code> in your .env file to connect to the live server.
           </div>
         )}
         <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-5 p-4 sm:p-6">

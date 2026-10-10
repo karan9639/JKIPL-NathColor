@@ -1,4 +1,3 @@
-import { JET_NUMBERS } from '@/lib/config'
 
 export interface StageField {
   /** Payload key sent to the backend. */
@@ -19,6 +18,7 @@ export interface StageDefinition {
   fields: StageField[]
 }
 
+const JET_NUMBERS = Array.from({ length: 30 }, (_, i) => i + 1)
 const STENTERS = ['ST-1', 'ST-2', 'ST-3', 'ST-4']
 
 export const STAGES: StageDefinition[] = [

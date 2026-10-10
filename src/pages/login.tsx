@@ -5,18 +5,21 @@ import { z } from 'zod'
 import { useLocation, useNavigate } from 'react-router'
 import { Eye, EyeOff, Palette } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
-import { config } from '@/lib/config'
 import { errorMessage } from '@/lib/api'
 import { session } from '@/lib/session'
 import { Button } from '@/components/ui/button'
 import { Field, Input } from '@/components/ui/field'
 
 const schema = z.object({
-  username: z.string().trim().min(1, 'Enter your username'),
+  username: z.string().trim().email('Enter a valid email address'),
   password: z.string().min(1, 'Enter your password'),
   remember: z.boolean(),
 })
 type FormValues = z.infer<typeof schema>
+
+const APP_NAME = 'Nathcolor+'
+const API_BASE_URL = (import.meta.env.VITE_PUBLIC_API_BASE_URL ?? '').trim()
+const USE_MOCK_API = import.meta.env.VITE_USE_MOCK_API === 'true' || API_BASE_URL === ''
 
 export function LoginPage() {
   const { login } = useAuth()
@@ -49,7 +52,7 @@ export function LoginPage() {
           <span className="flex size-9 items-center justify-center rounded-md bg-primary-foreground/15">
             <Palette className="size-5" aria-hidden="true" />
           </span>
-          <span className="text-lg font-semibold">{config.appName}</span>
+          <span className="text-lg font-semibold">{APP_NAME}</span>
         </div>
         <div className="mt-10 hidden max-w-md lg:block">
           <h1 className="text-balance text-3xl font-semibold leading-tight">Every order, lot and job card in one place.</h1>
@@ -78,7 +81,7 @@ export function LoginPage() {
         <form onSubmit={onSubmit} noValidate className="flex w-full max-w-sm flex-col gap-5">
           <div>
             <h2 className="text-2xl font-semibold tracking-tight">Sign in</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Use your Nathcolor+ credentials.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Use your Nathcolor+ email and password.</p>
           </div>
 
           {serverError && (
@@ -87,7 +90,7 @@ export function LoginPage() {
             </div>
           )}
 
-          <Field label="Username" htmlFor="username" error={formState.errors.username?.message}>
+          <Field label="Email" htmlFor="username" error={formState.errors.username?.message}>
             <Input id="username" autoComplete="username" autoCapitalize="none" autoFocus={!remembered} aria-invalid={!!formState.errors.username} {...register('username')} />
           </Field>
 
@@ -115,16 +118,16 @@ export function LoginPage() {
 
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" className="size-4 accent-primary" {...register('remember')} />
-            Remember my username
+            Remember my email
           </label>
 
           <Button type="submit" size="lg" loading={formState.isSubmitting}>
             Sign in
           </Button>
 
-          {config.useMockApi && (
+          {USE_MOCK_API && (
             <p className="rounded-md bg-accent-soft px-3 py-2 text-xs text-accent">
-              Demo mode: sign in with any username (try <span className="font-mono font-medium">ap</span> for full access) and any password.
+              Demo mode: sign in with any email (try <span className="font-mono font-medium">ap</span> for full access) and any password.
             </p>
           )}
         </form>

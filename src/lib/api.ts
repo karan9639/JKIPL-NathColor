@@ -1,5 +1,4 @@
 import axios, { AxiosError, type AxiosAdapter } from 'axios'
-import { config } from './config'
 import { session } from './session'
 
 export class ApiError extends Error {
@@ -9,6 +8,10 @@ export class ApiError extends Error {
     this.status = status
   }
 }
+
+const apiBaseUrl = (import.meta.env.VITE_PUBLIC_API_BASE_URL ?? '').trim().replace(/\/+$/, '')
+const useMockApi = import.meta.env.VITE_USE_MOCK_API === 'true' || apiBaseUrl === ''
+const timeoutMs = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 60000)
 
 let mockAdapter: AxiosAdapter | null = null
 
@@ -21,12 +24,12 @@ async function getMockAdapter(): Promise<AxiosAdapter> {
 }
 
 export const http = axios.create({
-  baseURL: config.useMockApi ? '/mock-api' : config.apiBaseUrl,
-  timeout: config.timeoutMs,
+  baseURL: useMockApi ? '/mock-api' : apiBaseUrl,
+  timeout: timeoutMs,
   headers: { 'Content-Type': 'application/json' },
 })
 
-if (config.useMockApi) {
+if (useMockApi) {
   http.defaults.adapter = async (cfg) => (await getMockAdapter())(cfg)
 }
 
