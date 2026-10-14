@@ -11,7 +11,11 @@ import { session } from '@/lib/session';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/field';
 const schema = z.object({
-    username: z.string().trim().email('Enter a valid email address'),
+    email: z
+        .string()
+        .trim()
+        .min(1, 'Enter your email address')
+        .email('Enter a valid email address'),
     password: z.string().min(1, 'Enter your password'),
     remember: z.boolean(),
 });
@@ -24,15 +28,15 @@ export function LoginPage() {
     const location = useLocation();
     const [showPassword, setShowPassword] = useState(false);
     const [serverError, setServerError] = useState(null);
-    const remembered = session.getRememberedUsername();
+    const remembered = session.getRememberedEmail();
     const { register, handleSubmit, formState } = useForm({
         resolver: zodResolver(schema),
-        defaultValues: { username: remembered, password: '', remember: !!remembered },
+        defaultValues: { email: remembered, password: '', remember: !!remembered },
     });
     const onSubmit = handleSubmit(async (values) => {
         setServerError(null);
         try {
-            await login(values.username, values.password, values.remember);
+            await login(values.email, values.password, values.remember);
             toast.success('Signed in successfully.');
             const from = location.state?.from;
             navigate(from && from !== '/login' ? from : '/', { replace: true });
@@ -84,8 +88,8 @@ export function LoginPage() {
               {serverError}
             </div>)}
 
-          <Field label="Email" htmlFor="username" error={formState.errors.username?.message}>
-            <Input id="username" autoComplete="username" autoCapitalize="none" autoFocus={!remembered} aria-invalid={!!formState.errors.username} {...register('username')}/>
+          <Field label="Email" htmlFor="email" error={formState.errors.email?.message}>
+            <Input id="email" type="email" inputMode="email" autoComplete="email" autoCapitalize="none" spellCheck={false} autoFocus={!remembered} aria-invalid={!!formState.errors.email} {...register('email')}/>
           </Field>
 
           <Field label="Password" htmlFor="password" error={formState.errors.password?.message}>

@@ -5,11 +5,9 @@ const username = () => session.getUsername();
 export function normalizeSearch(query) {
     return query.toUpperCase().split(/\s+/).filter(Boolean).sort().join(' ');
 }
+// Authentication lives in src/services/authAPI.js (email + password against
+// POST /user/login) and src/lib/auth.jsx. This module only serves data calls.
 export const api = {
-    async login(payload) {
-        const { data } = await http.post('/loginjasmine', payload);
-        return data;
-    },
     async searchOrders(menuKey, page, search) {
         const params = { page, menuKey, username: username() };
         if (search.trim())

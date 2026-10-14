@@ -32,6 +32,14 @@ test('recognizes backend success and reads role from data.foundUser', () => {
     });
 });
 
+test('email is the login identity even when a legacy username is present', () => {
+    const account = userFromLoginResponse({
+        data: { foundUser: { username: 'prashant', email: 'PRASHANT@Natharts.com', role: 'admin' } },
+    });
+    assert.equal(account.email, 'prashant@natharts.com');
+    assert.equal(account.username, 'prashant@natharts.com');
+});
+
 test('admin can see all restricted modules and dashboard', () => {
     const user = userFromLoginResponse(loginResponse);
     assert.equal(canAccess(recipes, user), true);
@@ -78,4 +86,8 @@ test('session persists admin role across refresh and clears it on logout', () =>
     session.clear();
     assert.equal(session.getUsername(), '');
     assert.equal(session.getUser(), null);
+    session.setRememberedEmail('prashant@natharts.com');
+    assert.equal(session.getRememberedEmail(), 'prashant@natharts.com');
+    session.setRememberedEmail(null);
+    assert.equal(session.getRememberedEmail(), '');
 });

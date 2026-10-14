@@ -41,7 +41,7 @@ export function setUnauthorizedHandler(handler) {
 http.interceptors.response.use((res) => res, (error) => {
     const status = error.response?.status;
     // Authentication endpoint failures should never recursively trigger logout.
-    const isAuthRequest = /\/(?:user\/(?:login|logout)|loginjasmine)(?:\?|$)/.test(error.config?.url ?? '');
+    const isAuthRequest = /\/user\/(?:login|logout)(?:\?|$)/.test(error.config?.url ?? '');
     if (status === 401 && !isAuthRequest && onUnauthorized && session.getUsername())
         onUnauthorized();
     const serverMessage = error.response?.data?.message ?? error.response?.data?.detail;

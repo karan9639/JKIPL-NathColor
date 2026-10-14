@@ -15,7 +15,9 @@ export function userFromLoginResponse(response, fallbackEmail) {
     return {
         id: String(foundUser._id ?? foundUser.id ?? ''),
         email,
-        username: String(foundUser.username ?? email).trim().toLowerCase(),
+        // Login is email-based, so the identity used for permissions and the
+        // "remember me" field is the email the user signed in with.
+        username: email || String(foundUser.username ?? '').trim().toLowerCase(),
         fullname: String(foundUser.fullname ?? foundUser.fullName ?? '').trim(),
         role: String(foundUser.role ?? '').trim().toLowerCase(),
     };

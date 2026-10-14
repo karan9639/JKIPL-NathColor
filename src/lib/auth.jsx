@@ -34,9 +34,9 @@ export function AuthProvider({ children }) {
         return () => setUnauthorizedHandler(null);
     }, [logout]);
 
-    const login = useCallback(async (userEmail, password, remember) => {
-        const email = userEmail.trim().toLowerCase();
-        const { data: response } = await loginUser({ email, password });
+    const login = useCallback(async (email, password, remember) => {
+        const normalizedEmail = email.trim().toLowerCase();
+        const { data: response } = await loginUser({ email: normalizedEmail, password });
         // Axios has already removed its HTTP wrapper. The backend's payload
         // is { statusCode, success, data: { foundUser: { role, email, ... } } }.
         const isSuccess = isSuccessfulLoginResponse(response);
@@ -44,13 +44,13 @@ export function AuthProvider({ children }) {
             throw new Error(response?.message ?? 'Invalid email or password.');
         }
 
-        const account = userFromLoginResponse(response, email);
+        const account = userFromLoginResponse(response, normalizedEmail);
         const token = response.token ?? response.accessToken ??
             response.data?.token ?? response.data?.accessToken ?? null;
         const menuOptions = response.menuoptionslist ?? response.data?.menuoptionslist ?? '';
 
         session.save(token, account.username, menuOptions, account);
-        session.setRememberedUsername(remember ? email : null);
+        session.setRememberedEmail(remember ? normalizedEmail : null);
         queryClient.clear(); // Clear any data from the previously logged-in account.
         dispatch(signedIn({ username: account.username, user: account }));
     }, [dispatch, queryClient]);

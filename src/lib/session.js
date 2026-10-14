@@ -1,8 +1,10 @@
 const TOKEN_KEY = 'nc.jwt_token';
+// The stored identity is the user's login email. The key name is retained so
+// sessions created before the email migration keep working.
 const USER_KEY = 'nc.username';
 const USER_DETAILS_KEY = 'nc.user';
 const MENU_KEY = 'nc.menuoptionslist';
-const REMEMBER_KEY = 'nc.remember_username';
+const REMEMBER_KEY = 'nc.remember_email';
 
 function readUser() {
     try {
@@ -35,9 +37,9 @@ export const session = {
         localStorage.removeItem(USER_DETAILS_KEY);
         localStorage.removeItem(MENU_KEY);
     },
-    getRememberedUsername: () => localStorage.getItem(REMEMBER_KEY) ?? '',
-    setRememberedUsername(username) {
-        if (username) localStorage.setItem(REMEMBER_KEY, username);
+    getRememberedEmail: () => localStorage.getItem(REMEMBER_KEY) ?? '',
+    setRememberedEmail(email) {
+        if (email) localStorage.setItem(REMEMBER_KEY, email);
         else localStorage.removeItem(REMEMBER_KEY);
     },
 };

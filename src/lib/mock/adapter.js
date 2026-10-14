@@ -24,6 +24,10 @@ function respond(cfg, body, status = 200) {
     }
     return { data: body, status, statusText: 'OK', headers: {}, config: cfg };
 }
+// Basic email shape check used by the demo login (mirrors the login form).
+function isEmailAddress(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
 function qrSvg(value) {
     let seed = 0;
     for (const ch of value)
@@ -57,26 +61,29 @@ export const mockAdapter = async (cfg) => {
     const params = (cfg.params ?? {});
     const body = parseBody(cfg);
     switch (`${method} ${url}`) {
+        // Email + password only. The legacy username-based login has been removed.
         case 'post /user/login': {
             const email = String(body.email ?? '').trim().toLowerCase();
-            if (!email.includes('@') || String(body.password ?? '').length < 2)
+            const password = String(body.password ?? '');
+            if (!isEmailAddress(email) || password.length < 2)
                 return respond(cfg, { success: false, message: 'Enter a valid demo email and password.' }, 401);
+            const shortName = email.split('@')[0];
             return respond(cfg, {
                 success: true,
                 token: `mock.${email}.${Date.now()}`,
-                data: { foundUser: { email, fullname: email.split('@')[0], role: ['admin', 'ap'].includes(email.split('@')[0]) ? 'admin' : 'user' }, menuoptionslist: '' },
+                data: {
+                    foundUser: {
+                        email,
+                        fullname: shortName,
+                        role: ['admin', 'ap'].includes(shortName) ? 'admin' : 'user',
+                    },
+                    menuoptionslist: '',
+                },
                 message: 'Demo login successful',
             });
         }
         case 'post /user/logout':
             return respond(cfg, { success: true, message: 'Demo logout successful' });
-        case 'post /loginjasmine': {
-            const user = String(body.username ?? '').toLowerCase();
-            if (!user || String(body.password ?? '').length < 2) {
-                return respond(cfg, { status: 'failed', message: 'Invalid username or password.' });
-            }
-            return respond(cfg, { status: 'passed', token: `mock.${user}.${Date.now()}`, menuoptionslist: '', message: 'Login successful' });
-        }
         case 'get /searchorders': {
             if (params.menuKey === 'DyeingProgramsPageKey')
                 return respond(cfg, { data: data.dyeingPrograms });
