@@ -1,6 +1,6 @@
 import { Dialog as RadixDialog } from 'radix-ui';
 import { X } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/format';
 export function Dialog({ open, onOpenChange, title, description, children, footer, className }) {
     return (<RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>

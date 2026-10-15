@@ -1,5 +1,5 @@
 import { Dialog } from '@/components/ui/dialog';
-import { formatCell, formatNumber, humanizeKey, pickString } from '@/lib/utils';
+import { formatCell, formatNumber, humanizeKey, pickString } from '@/utils/format';
 const SUMMARY_KEYS = [
     ['Customer', 'CUSTOMERNAME'],
     ['Brand', 'BRANDNAME'],

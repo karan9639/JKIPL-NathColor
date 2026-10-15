@@ -1,10 +1,10 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, extname } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { parse } from '@babel/parser';
 
 const allowed = new Set(['.js', '.jsx']);
-const scriptRoot = process.cwd();
-const srcRoot = join(scriptRoot, 'src');
+const root = process.cwd();
+const srcRoot = join(root, 'src');
 if (!existsSync(srcRoot)) throw new Error('Missing src directory');
 let count = 0;
 function scan(dir) {
@@ -16,9 +16,15 @@ function scan(dir) {
         if (!allowed.has(extension)) continue;
         const source = readFileSync(path, 'utf8');
         if (!source.trim()) throw new Error(`Empty source file: ${path}`);
-        if (extension === '.js') execFileSync(process.execPath, ['--check', path]);
+        try {
+            // Parses JSX as well as plain JS. Catches missing closing parentheses
+            // inside JSX conditionals BEFORE Vite tries to lazy-load a route.
+            parse(source, { sourceType: 'module', plugins: ['jsx', 'importAttributes'] });
+        } catch (error) {
+            throw new Error(`Invalid JavaScript/JSX in ${path}: ${error.message}`, { cause: error });
+        }
         count++;
     }
 }
 scan(srcRoot);
-console.log(`Checked ${count} JavaScript/JSX source files (Vite validates JSX during build).`);
+console.log(`Validated JSX/JavaScript syntax in ${count} source files. No TypeScript source.`);

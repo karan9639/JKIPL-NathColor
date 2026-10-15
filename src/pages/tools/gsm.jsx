@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { formatNumber, toNumber } from '@/lib/utils';
+import { formatNumber, toNumber } from '@/utils/format';
 import { Field, Input, Select } from '@/components/ui/field';
 import { PageHeader, Panel, PanelHeader } from '@/components/ui/panel';
 export default function GsmPage() {

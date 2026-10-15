@@ -2,9 +2,9 @@ import { useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { CheckCircle2, ScanLine } from 'lucide-react';
-import { api } from '@/lib/services';
-import { errorMessage } from '@/lib/api';
-import { formatCell, formatDate, formatNumber, nowLocalDateTime, pickString } from '@/lib/utils';
+import { productionService } from '@/services/production.service';
+import { errorMessage } from '@/services/http/client';
+import { formatCell, formatDate, formatNumber, nowLocalDateTime, pickString } from '@/utils/format';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Select, Textarea } from '@/components/ui/field';
 import { Badge, ErrorState, PageHeader, Panel, PanelHeader } from '@/components/ui/panel';
@@ -35,7 +35,7 @@ export default function StageEntryPage({ stage }) {
     const [remarks, setRemarks] = useState('');
     const [recent, setRecent] = useState([]);
     const lookup = useMutation({
-        mutationFn: (no) => api.searchJobCard(no),
+        mutationFn: (no) => productionService.searchJobCard(no),
         onSuccess: (row, no) => {
             if (!row) {
                 toast.error(`Job card ${no} not found`);
@@ -57,7 +57,7 @@ export default function StageEntryPage({ stage }) {
             const payload = { jobcardno, remarks };
             for (const f of stage.fields)
                 payload[f.name] = f.type === 'datetime' ? values[f.name].replace('T', ' ') : values[f.name];
-            return api.submitStage({ endpoint: stage.endpoint, payload });
+            return productionService.submitStage({ endpoint: stage.endpoint, payload });
         },
         onSuccess: (res) => {
             const no = pickString(card, 'JOBCARDNO') || jobNo.trim();

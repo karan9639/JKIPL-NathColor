@@ -1,5 +1,5 @@
 import { AlertTriangle, Inbox, Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/format';
 import { Button } from './button';
 export function Panel({ className, children }) {
     return <section className={cn('rounded-lg border border-border bg-surface', className)}>{children}</section>;

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Search, X } from 'lucide-react';
-import { api } from '@/lib/services';
-import { errorMessage } from '@/lib/api';
-import { formatCell, formatNumber, pickString, toNumber } from '@/lib/utils';
+import { ordersService } from '@/services/orders.service';
+import { errorMessage } from '@/services/http/client';
+import { formatCell, formatNumber, pickString, toNumber } from '@/utils/format';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/field';
 import { DataTable } from '@/components/ui/data-table';
@@ -34,7 +34,7 @@ export default function OrdersPage({ menuKey }) {
     const [selected, setSelected] = useState(null);
     const query = useInfiniteQuery({
         queryKey: ['orders', menuKey, search],
-        queryFn: ({ pageParam }) => api.searchOrders(menuKey, pageParam, search),
+        queryFn: ({ pageParam }) => ordersService.searchOrders(menuKey, pageParam, search),
         initialPageParam: 1,
         getNextPageParam: (last, pages) => (last.hasMore ? pages.length + 1 : undefined),
     });

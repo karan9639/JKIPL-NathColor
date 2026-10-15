@@ -1,15 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router';
-import { api } from '@/lib/services';
-import { errorMessage } from '@/lib/api';
-import { formatDate, formatNumber, toNumber } from '@/lib/utils';
+import { reportsService } from '@/services/reports.service';
+import { errorMessage } from '@/services/http/client';
+import { formatDate, formatNumber, toNumber } from '@/utils/format';
 import { DataTable } from '@/components/ui/data-table';
 import { EmptyState, PageHeader, Stat } from '@/components/ui/panel';
 const REPORTS = {
     'greige-requisition': {
         title: 'Greige Requisition Summary',
         description: 'Number of requisitions and tonnage requested per day.',
-        queryFn: api.greigeRequisitionSummary,
+        queryFn: reportsService.greigeRequisitionSummary,
         columns: [
             { key: 'REQ_DATE', label: 'Date', render: (r) => <span className="font-medium">{formatDate(r.REQ_DATE)}</span> },
             { key: 'NOS', label: 'Requisitions', align: 'right' },
@@ -23,7 +23,7 @@ const REPORTS = {
     'greige-issued': {
         title: 'Greige Issued Summary',
         description: 'Lots and tonnage issued to dyeing per day.',
-        queryFn: api.greigeIssuedSummary,
+        queryFn: reportsService.greigeIssuedSummary,
         columns: [
             { key: 'JOBCARDDATE', label: 'Date', render: (r) => <span className="font-medium">{formatDate(r.JOBCARDDATE)}</span> },
             { key: 'LOTS', label: 'Lots', align: 'right' },
@@ -38,7 +38,7 @@ const REPORTS = {
     lud: {
         title: 'Last Update (LUD)',
         description: 'When each data source was last refreshed and by whom.',
-        queryFn: api.lud,
+        queryFn: reportsService.lud,
         columns: [
             { key: 'Report', label: 'Source', render: (r) => <span className="font-medium">{String(r.Report ?? '')}</span> },
             { key: 'LUD', label: 'Last updated', render: (r) => formatDate(r.LUD, true) },

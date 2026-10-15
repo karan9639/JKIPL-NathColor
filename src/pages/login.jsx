@@ -5,9 +5,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useLocation, useNavigate } from 'react-router';
 import { Eye, EyeOff, Palette } from 'lucide-react';
-import { useAuth } from '@/lib/auth';
-import { errorMessage } from '@/lib/api';
-import { session } from '@/lib/session';
+import { useAuth } from '@/hooks/useAuth';
+import { errorMessage } from '@/services/http/client';
+import { session } from '@/services/auth/session';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/field';
 const schema = z.object({

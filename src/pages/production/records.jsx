@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { api } from '@/lib/services';
-import { errorMessage } from '@/lib/api';
-import { formatDate, toNumber } from '@/lib/utils';
+import { productionService } from '@/services/production.service';
+import { errorMessage } from '@/services/http/client';
+import { formatDate, toNumber } from '@/utils/format';
 import { DataTable } from '@/components/ui/data-table';
 import { PageHeader, Stat } from '@/components/ui/panel';
 const KEYS = [
@@ -18,7 +18,7 @@ const columns = [
     ...KEYS.map(([key, label]) => ({ key, label, align: 'right' })),
 ];
 export default function RecordsPage() {
-    const query = useQuery({ queryKey: ['records'], queryFn: api.records });
+    const query = useQuery({ queryKey: ['records'], queryFn: productionService.records });
     const rows = query.data ?? [];
     return (<>
       <PageHeader title="Daily Records" description="Number of entries recorded per production stage each day."/>

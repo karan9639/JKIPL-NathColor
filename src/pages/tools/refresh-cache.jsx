@@ -1,14 +1,14 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { RefreshCw } from 'lucide-react';
-import { api } from '@/lib/services';
-import { errorMessage } from '@/lib/api';
+import { toolsService } from '@/services/tools.service';
+import { errorMessage } from '@/services/http/client';
 import { Button } from '@/components/ui/button';
 import { PageHeader, Panel } from '@/components/ui/panel';
 export default function RefreshCachePage() {
     const qc = useQueryClient();
     const flush = useMutation({
-        mutationFn: api.flushCache,
+        mutationFn: toolsService.flushCache,
         onSuccess: (res) => {
             qc.invalidateQueries();
             toast.success(String(res?.message ?? 'Cache cleared'));

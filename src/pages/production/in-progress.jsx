@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '@/lib/services';
-import { errorMessage } from '@/lib/api';
-import { cn, formatDate, formatNumber, pickString, toNumber } from '@/lib/utils';
+import { productionService } from '@/services/production.service';
+import { errorMessage } from '@/services/http/client';
+import { cn, formatDate, formatNumber, pickString, toNumber } from '@/utils/format';
 import { DataTable } from '@/components/ui/data-table';
 import { Badge, PageHeader } from '@/components/ui/panel';
 const STAGE_ORDER = ['Awaiting dyes', 'Dyes issued', 'In jet', 'Heat set', 'Finished'];
@@ -37,7 +37,7 @@ const columns = [
     { key: 'FINISHING_MACHINE', label: 'Fin. stenter' },
 ];
 export default function InProgressPage() {
-    const query = useQuery({ queryKey: ['production-stages'], queryFn: api.productionStages, refetchInterval: 120_000 });
+    const query = useQuery({ queryKey: ['production-stages'], queryFn: productionService.productionStages, refetchInterval: 120_000 });
     const [active, setActive] = useState(null);
     const all = query.data ?? [];
     const counts = useMemo(() => {

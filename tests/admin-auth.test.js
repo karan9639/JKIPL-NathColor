@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canAccess } from '../src/lib/permissions.js';
-import { isSuccessfulLoginResponse, userFromLoginResponse } from '../src/lib/identity.js';
-import { session } from '../src/lib/session.js';
+import { canAccess } from '../src/constants/permissions.js';
+import { isSuccessfulLoginResponse, userFromLoginResponse } from '../src/services/auth/identity.js';
+import { session } from '../src/services/auth/session.js';
 
 const loginResponse = {
     statusCode: 200,

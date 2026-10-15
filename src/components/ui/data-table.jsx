@@ -1,7 +1,7 @@
 import { useDeferredValue, useId, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown, Download, Search } from 'lucide-react';
-import { cn, formatCell, humanizeKey, isNumericLike, toNumber } from '@/lib/utils';
-import { exportRowsToXlsx } from '@/lib/spreadsheet';
+import { cn, formatCell, humanizeKey, isNumericLike, rowField, toNumber } from '@/utils/format';
+import { exportRowsToXlsx } from '@/utils/spreadsheet';
 import { Button } from './button';
 import { Input } from './field';
 import { EmptyState, ErrorState, LoadingState, Panel } from './panel';
@@ -24,13 +24,13 @@ export function DataTable({ rows, columns, title, description, isLoading, error,
         const words = deferredQuery.trim().toUpperCase().split(/\s+/).filter(Boolean);
         if (words.length) {
             out = out.filter((r) => {
-                const hay = cols.map((c) => formatCell(r[c.key])).join(' ').toUpperCase();
+                const hay = cols.map((c) => formatCell(rowField(r, c.key))).join(' ').toUpperCase();
                 return words.every((w) => hay.includes(w));
             });
         }
         if (sort) {
             const col = cols.find((c) => c.key === sort.key);
-            const getter = col?.sortValue ?? ((r) => (col?.align === 'right' ? toNumber(r[sort.key]) : String(r[sort.key] ?? '')));
+            const getter = col?.sortValue ?? ((r) => (col?.align === 'right' ? toNumber(rowField(r, sort.key)) : String(rowField(r, sort.key) ?? '')));
             out = [...out].sort((a, b) => {
                 const av = getter(a);
                 const bv = getter(b);
@@ -61,7 +61,7 @@ export function DataTable({ rows, columns, title, description, isLoading, error,
                 </label>
                 <Input id={filterId} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter rows…" className="h-9 pl-9"/>
               </div>)}
-            {exportName && (<Button variant="outline" size="sm" className="h-9" disabled={!visible.length} onClick={() => exportRowsToXlsx(visible, cols.map((c) => c.key), exportName)}>
+            {exportName && (<Button variant="outline" size="sm" className="h-9" disabled={!visible.length} onClick={() => exportRowsToXlsx(visible.map((row) => Object.fromEntries(cols.map((c) => [c.key, rowField(row, c.key) ?? '']))), cols.map((c) => c.key), exportName)}>
                 <Download aria-hidden="true"/>
                 Export
               </Button>)}
@@ -86,7 +86,7 @@ export function DataTable({ rows, columns, title, description, isLoading, error,
             <tbody>
               {visible.map((row, i) => (<tr key={i} onClick={onRowClick ? () => onRowClick(row) : undefined} onKeyDown={onRowClick ? (e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onRowClick(row)) : undefined} tabIndex={onRowClick ? 0 : undefined} className={cn('border-b border-border/70 last:border-0 even:bg-muted/30', onRowClick && 'cursor-pointer hover:bg-primary-soft/60 focus-visible:bg-primary-soft/60')}>
                   {cols.map((c) => (<td key={c.key} className={cn('px-3 py-2 align-top whitespace-nowrap', c.align === 'right' && 'tabular text-right', c.className)}>
-                      {c.render ? c.render(row) : formatCell(row[c.key])}
+                      {c.render ? c.render(row) : formatCell(rowField(row, c.key))}
                     </td>))}
                 </tr>))}
             </tbody>

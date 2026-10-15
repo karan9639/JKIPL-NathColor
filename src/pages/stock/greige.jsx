@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '@/lib/services';
-import { errorMessage } from '@/lib/api';
-import { formatDate, formatNumber, toNumber } from '@/lib/utils';
+import { inventoryService } from '@/services/inventory.service';
+import { errorMessage } from '@/services/http/client';
+import { formatDate, formatNumber, toNumber } from '@/utils/format';
 import { DataTable } from '@/components/ui/data-table';
 import { Select } from '@/components/ui/field';
 import { PageHeader, Stat } from '@/components/ui/panel';
@@ -16,7 +16,7 @@ const columns = [
     { key: 'LUD', label: 'Updated', render: (r) => formatDate(r.LUD, true) },
 ];
 export default function GreigeStockPage() {
-    const query = useQuery({ queryKey: ['greige-stock'], queryFn: api.greigeStock });
+    const query = useQuery({ queryKey: ['greige-stock'], queryFn: inventoryService.greigeStock });
     const [unit, setUnit] = useState('all');
     const all = query.data ?? [];
     const rows = useMemo(() => {

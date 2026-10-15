@@ -1,5 +1,5 @@
 import { forwardRef } from 'react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/format';
 const control = 'w-full rounded-md border border-border bg-surface px-3 text-foreground placeholder:text-muted-foreground/70 transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-muted aria-[invalid=true]:border-danger';
 export const Input = forwardRef(function Input({ className, ...props }, ref) {
     return <input ref={ref} className={cn(control, 'h-10', className)} {...props}/>;

@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Download, Printer, QrCode } from 'lucide-react';
-import { api } from '@/lib/services';
-import { errorMessage } from '@/lib/api';
-import { downloadBlob } from '@/lib/utils';
+import { toolsService } from '@/services/tools.service';
+import { errorMessage } from '@/services/http/client';
+import { downloadBlob } from '@/utils/format';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/field';
 import { PageHeader, Panel, PanelHeader } from '@/components/ui/panel';
@@ -16,7 +16,7 @@ export default function QrPage() {
             URL.revokeObjectURL(image.url);
     }, [image]);
     const generate = useMutation({
-        mutationFn: (v) => api.generateQr(v),
+        mutationFn: (v) => toolsService.generateQr(v),
         onSuccess: (blob, v) => setImage({ url: URL.createObjectURL(blob), blob, value: v }),
         onError: (e) => toast.error(errorMessage(e)),
     });

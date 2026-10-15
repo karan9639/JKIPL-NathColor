@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
-import { api } from '@/lib/services';
-import { errorMessage } from '@/lib/api';
-import { formatCell, pickString } from '@/lib/utils';
+import { recipesService } from '@/services/recipes.service';
+import { errorMessage } from '@/services/http/client';
+import { formatCell, pickString } from '@/utils/format';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/field';
 import { Badge, EmptyState, ErrorState, LoadingState, PageHeader, Panel } from '@/components/ui/panel';
@@ -41,7 +41,7 @@ function RecipeCard({ r }) {
 export default function RecipesPage() {
     const [draft, setDraft] = useState('');
     const [search, setSearch] = useState('');
-    const query = useQuery({ queryKey: ['recipes', search], queryFn: () => api.searchRecipe(search), enabled: search.length > 0 });
+    const query = useQuery({ queryKey: ['recipes', search], queryFn: () => recipesService.searchRecipe(search), enabled: search.length > 0 });
     return (<>
       <PageHeader title="Recipes" description="Search shade recipes by party, quality, shade or dye name."/>
       <form role="search" className="flex gap-2" onSubmit={(e) => {

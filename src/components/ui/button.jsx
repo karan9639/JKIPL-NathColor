@@ -1,6 +1,6 @@
 import { forwardRef } from 'react';
 import { Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/format';
 const variants = {
     primary: 'bg-primary text-primary-foreground hover:bg-primary-hover',
     secondary: 'bg-primary-soft text-primary hover:bg-primary-soft/70',

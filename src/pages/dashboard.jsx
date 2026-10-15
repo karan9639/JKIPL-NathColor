@@ -2,10 +2,11 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
 import { ArrowRight } from 'lucide-react';
-import { api } from '@/lib/services';
-import { useAuth } from '@/lib/auth';
-import { NAV_GROUPS } from '@/lib/navigation';
-import { formatDate, parseLooseDate, toNumber } from '@/lib/utils';
+import { productionService } from '@/services/production.service';
+import { reportsService } from '@/services/reports.service';
+import { useAuth } from '@/hooks/useAuth';
+import { NAV_GROUPS } from '@/constants/navigation';
+import { formatDate, parseLooseDate, toNumber } from '@/utils/format';
 import { Badge, PageHeader, Panel, PanelHeader, Stat, LoadingState } from '@/components/ui/panel';
 const SERIES = [
     { key: 'Jet', color: 'var(--color-primary)' },
@@ -25,8 +26,8 @@ function freshness(value) {
 }
 export default function DashboardPage() {
     const { username, user, can } = useAuth();
-    const records = useQuery({ queryKey: ['records'], queryFn: api.records });
-    const lud = useQuery({ queryKey: ['lud'], queryFn: api.lud });
+    const records = useQuery({ queryKey: ['records'], queryFn: productionService.records });
+    const lud = useQuery({ queryKey: ['lud'], queryFn: reportsService.lud });
     const rows = [...(records.data ?? [])].sort((a, b) => String(a.Date).localeCompare(String(b.Date)));
     const latest = rows.at(-1);
     const chartData = rows.slice(-10).map((r) => ({ ...r, label: formatDate(r.Date).slice(0, 6) }));

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { api } from '@/lib/services';
-import { errorMessage } from '@/lib/api';
-import { pickString } from '@/lib/utils';
+import { inventoryService } from '@/services/inventory.service';
+import { errorMessage } from '@/services/http/client';
+import { pickString } from '@/utils/format';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/field';
 import { DataTable } from '@/components/ui/data-table';
@@ -15,14 +15,14 @@ const columns = [
 ];
 export default function FabricMappingPage() {
     const qc = useQueryClient();
-    const mappings = useQuery({ queryKey: ['fabric-mappings'], queryFn: api.fabricMappings });
-    const erpNames = useQuery({ queryKey: ['erp-names'], queryFn: api.erpGreigeNames, staleTime: 10 * 60_000 });
+    const mappings = useQuery({ queryKey: ['fabric-mappings'], queryFn: inventoryService.fabricMappings });
+    const erpNames = useQuery({ queryKey: ['erp-names'], queryFn: inventoryService.erpGreigeNames, staleTime: 10 * 60_000 });
     const [selected, setSelected] = useState(null);
     const [erp, setErp] = useState('');
     const rows = mappings.data ?? [];
     const unmapped = rows.filter((r) => !pickString(r, 'ERP_Name')).length;
     const save = useMutation({
-        mutationFn: () => api.saveFabricMapping(pickString(selected, 'FabricName', 'FABRICNAME'), erp.trim()),
+        mutationFn: () => inventoryService.saveFabricMapping(pickString(selected, 'FabricName', 'FABRICNAME'), erp.trim()),
         onSuccess: (res) => {
             toast.success(String(res?.message ?? 'Mapping saved'));
             qc.invalidateQueries({ queryKey: ['fabric-mappings'] });

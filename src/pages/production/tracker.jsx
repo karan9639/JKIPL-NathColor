@@ -3,12 +3,12 @@ import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { CalendarDays, ClipboardPenLine, FileUp, Link2, RotateCcw } from 'lucide-react';
-import { api } from '@/lib/services';
-import { errorMessage } from '@/lib/api';
-import { config } from '@/lib/config';
-import { linkedCards, knittingStatus, plannedKgs, poDateValue, poLineId, poNumber, producedKgs } from '@/lib/knitting';
-import { formatDate, formatNumber, parseLooseDate, pickString, todayISO } from '@/lib/utils';
-import { toIsoDate } from '@/lib/spreadsheet';
+import { productionService } from '@/services/production.service';
+import { errorMessage } from '@/services/http/client';
+import { config } from '@/config/env';
+import { linkedCards, knittingStatus, plannedKgs, poDateValue, poLineId, poNumber, producedKgs } from '@/utils/knitting';
+import { formatDate, formatNumber, parseLooseDate, pickString, todayISO } from '@/utils/format';
+import { toIsoDate } from '@/utils/spreadsheet';
 import { DataTable } from '@/components/ui/data-table';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -126,7 +126,7 @@ function EditKnittingDialog({ line, onClose, onShowCards }) {
     const [orderId, setOrderId] = useState('');
     const [lot, setLot] = useState('');
     const save = useMutation({
-        mutationFn: api.createKnittingEntry,
+        mutationFn: productionService.createKnittingEntry,
         onSuccess: async () => {
             await Promise.all([queryClient.invalidateQueries({ queryKey: ['knitting-po-lines'] }), queryClient.invalidateQueries({ queryKey: ['tracker'] })]);
             toast.success('Knitting production updated');
@@ -135,7 +135,7 @@ function EditKnittingDialog({ line, onClose, onShowCards }) {
         onError: (e) => toast.error(errorMessage(e)),
     });
     const link = useMutation({
-        mutationFn: api.linkKnittingJobCard,
+        mutationFn: productionService.linkKnittingJobCard,
         onSuccess: async () => {
             await Promise.all([queryClient.invalidateQueries({ queryKey: ['knitting-po-lines'] }), queryClient.invalidateQueries({ queryKey: ['tracker'] })]);
             toast.success('Job card linked to PO line');
@@ -208,8 +208,8 @@ function EditKnittingDialog({ line, onClose, onShowCards }) {
   </Dialog>;
 }
 export default function TrackerPage() {
-    const tracker = useQuery({ queryKey: ['tracker'], queryFn: api.tracker });
-    const pos = useQuery({ queryKey: ['knitting-po-lines'], queryFn: api.knittingPOLines, retry: false });
+    const tracker = useQuery({ queryKey: ['tracker'], queryFn: productionService.tracker });
+    const pos = useQuery({ queryKey: ['knitting-po-lines'], queryFn: productionService.knittingPOLines, retry: false });
     const [basis, setBasis] = useState('PO_DATE');
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
