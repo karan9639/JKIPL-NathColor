@@ -5,11 +5,12 @@ import { toast } from 'sonner';
 import { ClipboardPaste, FileUp, Upload, RefreshCw } from 'lucide-react';
 import { dyeingService } from '@/services/dyeing.service';
 import { yarnService } from '@/services/yarn.service';
+import { ordersService } from '@/services/orders.service';
 import { importsService } from '@/services/imports.service';
 import { errorMessage } from '@/services/http/client';
 import { config } from '@/config/env';
 import { chunk, exportRowsToXlsx, parseClipboardTable, readHtmlTables, readWorkbook, zipFile } from '@/utils/spreadsheet';
-import { extractYarnTable, dataTableRows } from '@/utils/import-mappers';
+import { extractYarnTable, dataTableRows, extractOrderBookTable, normalizeOrderBookRecords } from '@/utils/import-mappers';
 import { COMPLETION_TEMPLATE, normalizeCompletionSheet, normalizePlanningSheet } from '@/utils/knitting';
 import { humanizeKey } from '@/utils/format';
 import { IMPORTS } from '@/constants/imports';
@@ -42,7 +43,9 @@ function ImportPage({ def }) {
     const [savedPage, setSavedPage] = useState(1);
 
     const finishParse = (sourceRows) => {
-        const { rows: clean, errors } = normalizeRecords(def, sourceRows);
+        const { rows: clean, errors } = def.backend === 'orderbook'
+            ? normalizeOrderBookRecords(sourceRows)
+            : normalizeRecords(def, sourceRows);
         setRows(clean);
         setIssues(errors);
         setResult(null);
@@ -57,7 +60,21 @@ function ImportPage({ def }) {
         if (def.source === 'zip') return;
         setParsing(true);
         try {
-            if (def.source === 'html') {
+            if (def.backend === 'orderbook') {
+                // ERP exports may be real Excel workbooks or HTML tables saved with .xls.
+                const fileStart = await selectedFile.slice(0, 512).text().catch(() => '');
+                const looksLikeHtml = /<\s*(html|table|head|body)\b/i.test(fileStart);
+                let table;
+                if (/\.(html?|htm)$/i.test(selectedFile.name) || looksLikeHtml) {
+                    const tables = await readHtmlTables(selectedFile);
+                    table = extractOrderBookTable(tables);
+                } else {
+                    const book = await readWorkbook(selectedFile);
+                    const sheet = book.sheetNames[0];
+                    table = extractOrderBookTable([book.sheetRows(sheet, false)]);
+                }
+                finishParse(table);
+            } else if (def.source === 'html') {
                 const tables = await readHtmlTables(selectedFile);
                 if (def.backend === 'yarn') {
                     const { records, reportPeriod } = extractYarnTable(tables);
@@ -98,6 +115,31 @@ function ImportPage({ def }) {
     };
     const upload = useMutation({
         mutationFn: async () => {
+            if (def.backend === 'orderbook') {
+                if (!rows.length || issues.length) throw new Error('Choose a valid Order Book file and correct any invalid rows before uploading.');
+                const batches = chunk(rows, def.chunkSize ?? 100);
+                const totals = {};
+                setProgress({ done: 0, total: batches.length });
+                for (const [i, batch] of batches.entries()) {
+                    let res;
+                    try {
+                        res = await ordersService.createOrderBook(batch);
+                    } catch (error) {
+                        if (i > 0) {
+                            throw new Error(`${i} batch(es) were uploaded before this request failed. Check the database before retrying to avoid duplicate records. ${errorMessage(error)}`);
+                        }
+                        throw error;
+                    }
+                    for (const [key, value] of Object.entries(res ?? {})) {
+                        totals[key] = typeof value === 'number'
+                            ? Number(totals[key] ?? 0) + value
+                            : Array.isArray(value) ? [...(totals[key] ?? []), ...value] : value;
+                    }
+                    setRows((current) => current.slice(batch.length));
+                    setProgress({ done: i + 1, total: batches.length });
+                }
+                return totals;
+            }
             if (def.source === 'zip') {
                 if (!file) throw new Error('Choose a file first');
                 return importsService.uploadZip(def.endpoint, await zipFile(file), `${file.name}.zip`);
@@ -142,6 +184,7 @@ function ImportPage({ def }) {
             void queryClient.invalidateQueries({ queryKey: ['tracker'] });
             void queryClient.invalidateQueries({ queryKey: ['dyeing-programs'] });
             void queryClient.invalidateQueries({ queryKey: ['yarn-stock'] });
+            void queryClient.invalidateQueries({ queryKey: ['orders'] });
         },
         onError: (e) => toast.error(errorMessage(e)),
         onSettled: () => setProgress(null),
@@ -220,7 +263,7 @@ function ImportPage({ def }) {
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{summarize(result).map(([label, value]) => <Stat key={label} label={label} value={value}/>)}</div>
           {errorRows.length > 0 && <DataTable rows={errorRows} columns={Object.keys(errorRows[0]).map((key) => ({ key, label: key }))} title="Rejected rows" exportName="import-errors"/>}
       </>}
-      {!!def.backend && <Panel>
+      {(def.backend === 'dyeing' || def.backend === 'yarn') && <Panel>
           <PanelHeader title="Saved imports"/>
           <div className="flex flex-wrap items-end gap-3 p-4">
               <Field label={def.backend === 'dyeing' ? 'Dyeing schedule date' : 'Stock report to date'} htmlFor="saved-date">

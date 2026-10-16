@@ -1,22 +1,23 @@
 import { useState } from 'react';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Search, X } from 'lucide-react';
 import { ordersService } from '@/services/orders.service';
 import { errorMessage } from '@/services/http/client';
-import { formatCell, formatNumber, pickString, toNumber } from '@/utils/format';
+import { formatCell, formatDate, formatNumber, pickString, toNumber } from '@/utils/format';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/field';
 import { DataTable } from '@/components/ui/data-table';
 import { PageHeader, Stat } from '@/components/ui/panel';
 import { OrderDetailDialog } from '@/components/orders/order-detail-dialog';
+import { ImportReportPagination } from '@/components/reports/import-report-filters';
 const TITLES = {
     SearchOrdersPageKey: { title: 'All Orders', description: 'Search the full order book by order number, customer, fabric, color or PO.' },
     DomesticPendingOrdersPageKey: { title: 'Domestic Pending Orders', description: 'Domestic orders with balance quantity yet to dispatch.' },
     BrandsPendingOrdersPageKey: { title: 'Brands Pending Orders', description: 'Brand orders with balance quantity yet to dispatch.' },
 };
-const columns = [
+const legacyColumns = [
     { key: 'ORDERNUMBER', label: 'Order', render: (r) => <span className="font-medium text-primary">{pickString(r, 'ORDERNUMBER', 'ORDERID')}</span> },
-    { key: 'ORD_DATE', label: 'Date' },
+    { key: 'ORD_DATE', label: 'Date', render: (r) => r.ORD_DATE ? formatDate(r.ORD_DATE) : '—' },
     { key: 'CUSTOMERNAME', label: 'Customer', className: 'max-w-56 truncate' },
     { key: 'BRANDNAME', label: 'Brand' },
     { key: 'UPPERFABRICNAME', label: 'Fabric', className: 'max-w-64 truncate' },
@@ -27,26 +28,57 @@ const columns = [
     { key: 'BALKGS', label: 'Balance', align: 'right', render: (r) => <span className="font-semibold">{formatNumber(r.BALKGS)}</span> },
     { key: 'STATUS', label: 'Status', render: (r) => formatCell(r.STATUS) },
 ];
+const orderBookColumns = [
+    { key: 'orderId', label: 'Order', render: (r) => <span className="font-medium text-primary">{r.orderId ?? '—'}</span> },
+    { key: 'receivedDate', label: 'Date', render: (r) => r.receivedDate ? formatDate(r.receivedDate) : '—' },
+    { key: 'customerName', label: 'Customer', className: 'max-w-56 truncate' },
+    { key: 'brandName', label: 'Brand' },
+    { key: 'upperFabricName', label: 'Fabric', className: 'max-w-64 truncate' },
+    { key: 'upperColor', label: 'Color' },
+    { key: 'quantity', label: 'Ord qty', align: 'right', render: (r) => formatNumber(r.quantity) },
+    { key: 'issued', label: 'Issued', align: 'right', render: () => formatNumber(0) },
+    { key: 'dispatched', label: 'Dispatched', align: 'right', render: () => formatNumber(0) },
+    { key: 'balance', label: 'Balance', align: 'right', render: (r) => <span className="font-semibold">{formatNumber(r.quantity)}</span> },
+    { key: 'status', label: 'Status', render: (r) => formatCell(r.storeType) },
+];
 export default function OrdersPage({ menuKey }) {
     const meta = TITLES[menuKey];
     const [draft, setDraft] = useState('');
     const [search, setSearch] = useState('');
     const [selected, setSelected] = useState(null);
-    const query = useInfiniteQuery({
-        queryKey: ['orders', menuKey, search],
+    const [orderBookPage, setOrderBookPage] = useState(1);
+    const isOrderBook = menuKey === 'SearchOrdersPageKey';
+
+    const legacyQuery = useInfiniteQuery({
+        queryKey: ['orders-legacy', menuKey, search],
         queryFn: ({ pageParam }) => ordersService.searchOrders(menuKey, pageParam, search),
         initialPageParam: 1,
         getNextPageParam: (last, pages) => (last.hasMore ? pages.length + 1 : undefined),
+        enabled: !isOrderBook,
     });
-    const rows = query.data?.pages.flatMap((p) => p.rows) ?? [];
-    const first = query.data?.pages[0];
-    const loadedBalance = rows.reduce((s, r) => s + toNumber(r.BALKGS), 0);
+    const orderBookQuery = useQuery({
+        queryKey: ['order-book', orderBookPage, search],
+        queryFn: () => ordersService.fetchOrderBook(orderBookPage, search),
+        enabled: isOrderBook,
+        staleTime: 30_000,
+        retry: 1,
+    });
+    const query = isOrderBook ? orderBookQuery : legacyQuery;
+    const rows = isOrderBook
+        ? (orderBookQuery.data?.rows ?? [])
+        : (legacyQuery.data?.pages.flatMap((page) => page.rows) ?? []);
+    const first = isOrderBook ? orderBookQuery.data : legacyQuery.data?.pages[0];
+    const pagination = orderBookQuery.data?.pagination;
+    const loadedBalance = rows.reduce((sum, row) => sum + toNumber(isOrderBook ? row.quantity : row.BALKGS), 0);
+    const columns = isOrderBook ? orderBookColumns : legacyColumns;
+
     return (<>
       <PageHeader title={meta.title} description={meta.description}/>
 
       <form role="search" className="flex flex-col gap-2 sm:flex-row" onSubmit={(e) => {
             e.preventDefault();
             setSearch(draft.trim());
+            setOrderBookPage(1);
         }}>
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true"/>
@@ -62,6 +94,7 @@ export default function OrdersPage({ menuKey }) {
           {search && (<Button variant="outline" size="lg" onClick={() => {
                 setDraft('');
                 setSearch('');
+                setOrderBookPage(1);
             }}>
               <X aria-hidden="true"/>
               Clear
@@ -76,12 +109,13 @@ export default function OrdersPage({ menuKey }) {
         <Stat label="Loaded balance (kg)" value={formatNumber(loadedBalance, 0)}/>
       </div>
 
-      <DataTable rows={rows} columns={columns} isLoading={query.isLoading} error={query.error ? errorMessage(query.error) : null} onRetry={() => query.refetch()} exportName={meta.title.toLowerCase().replace(/\s+/g, '-')} description={search ? `Results for "${search}"` : 'Click an order for lots and dispatch details'} onRowClick={setSelected} emptyDescription={search ? 'Try fewer or different keywords.' : undefined} footer={query.hasNextPage || query.isFetchingNextPage ? (<div className="flex justify-center">
-              <Button variant="outline" onClick={() => query.fetchNextPage()} loading={query.isFetchingNextPage}>
+      <DataTable rows={rows} columns={columns} isLoading={query.isLoading} error={query.error ? errorMessage(query.error) : null} onRetry={() => query.refetch()} exportName={meta.title.toLowerCase().replace(/\s+/g, '-')} description={search ? `Results for "${search}"` : 'Click an order for lots and dispatch details'} onRowClick={setSelected} emptyDescription={search ? 'Try fewer or different keywords.' : undefined} footer={!isOrderBook && (legacyQuery.hasNextPage || legacyQuery.isFetchingNextPage) ? (<div className="flex justify-center">
+              <Button variant="outline" onClick={() => legacyQuery.fetchNextPage()} loading={legacyQuery.isFetchingNextPage}>
                 Load more orders
               </Button>
-            </div>) : rows.length ? (<p className="text-center text-xs text-muted-foreground">All matching orders loaded.</p>) : null}/>
+            </div>) : !isOrderBook && rows.length ? (<p className="text-center text-xs text-muted-foreground">All matching orders loaded.</p>) : null}/>
 
+      {isOrderBook && <ImportReportPagination pagination={pagination} disabled={orderBookQuery.isFetching} onPageChange={setOrderBookPage}/>}
       <OrderDetailDialog order={selected} onClose={() => setSelected(null)}/>
     </>);
 }

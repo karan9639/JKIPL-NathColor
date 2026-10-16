@@ -117,3 +117,66 @@ export function extractYarnTable(tables) {
     const report = table.slice(0, headerIndex).flat().join(' ').match(/From\s*Date\s*:\s*(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})\s*To\s*Date\s*:\s*(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})/i);
     return { records, reportPeriod: report ? { fromDate: excelDate(report[1]), toDate: excelDate(report[2]) } : null };
 }
+
+/** Convert ERP Order Book column headings into the backend's camelCase schema. */
+const orderBookFields = {
+    orderId: ['ORDER ID'], location: ['LOCATION'], customerGroupCode: ['CUSTOMER GROUP CODE'],
+    customerName: ['CUSTOMER NAME'], refPO: ['REF PO'], orderNumber: ['ORDER NUMBER'],
+    itemId: ['ITEM ID'], itemName: ['ITEM NAME'], customerItemCode: ['CUST. ITEM CODE'],
+    product: ['PRODUCT'], receivedDate: ['RECEIVED DATE'], deliveryDate: ['DELIVERY DATE'],
+    rate: ['RATE'], quantity: ['QTY.', 'QUANTITY'], upperGsm: ['UPPER GSM'],
+    foamThickness: ['FOAM THICKNESS'], evaThickness: ['EVA THICKNESS'],
+    backerGsm: ['BACKER GSM'], shortClosedQty: ['SHORT CLOSED QTY.'],
+    width: ['WIDTH'], amount: ['AMOUNT'], remark: ['REMARK'], storeType: ['STORE TYPE'],
+    upperFabricName: ['UPPER FABRIC NAME'], laminationUpper: ['LAMINATION UPPER'],
+    upperColor: ['UPPER COLOR'], foamDensity: ['FOAM DENSITY'], foamColor: ['FOAM COLOR'],
+    evaType: ['EVA TYPE'], evaColor: ['EVA COLOR'], backerName: ['BACKER NAME'],
+    laminationBacker: ['LAMINATION BACKER'], backerColor: ['BACKER COLOR'],
+    uom: ['UOM'], brandName: ['BRAND NAME'], laminationDetail: ['LAMINATION DETAIL'],
+    productionMonth: ['PRODUCTION MONTH'],
+};
+const orderBookNumericFields = new Set([
+    'rate', 'quantity', 'upperGsm', 'foamThickness', 'evaThickness',
+    'backerGsm', 'shortClosedQty', 'width', 'amount',
+]);
+export function normalizeOrderBookRecords(records) {
+    const rows = [], errors = [];
+    records.forEach((row, index) => {
+        const result = {};
+        for (const [field, headers] of Object.entries(orderBookFields)) {
+            const value = recordAt(row, field, ...headers);
+            if (orderBookNumericFields.has(field)) {
+                if (asText(value) === '') continue;
+                const numeric = asNumber(value);
+                if (!Number.isFinite(numeric)) {
+                    errors.push(`Data row ${index + 1}: ${field} must be numeric`);
+                    continue;
+                }
+                result[field] = numeric;
+            } else if (field === 'receivedDate' || field === 'deliveryDate') {
+                if (asText(value)) {
+                    const parsed = excelDate(value);
+                    if (!parsed) errors.push(`Data row ${index + 1}: invalid ${field}`);
+                    else result[field] = parsed;
+                }
+            } else {
+                result[field] = asText(value);
+            }
+        }
+        // ERP reports may contain repeated headings, blank lines and totals.
+        if (!result.orderId || headerKey(result.orderId) === 'orderid' || /^total\b/i.test(result.orderId)) return;
+        const missing = ['customerName', 'itemName'].filter((field) => !result[field]);
+        if (missing.length) errors.push(`Data row ${index + 1}: missing ${missing.join(', ')}`);
+        else rows.push(result);
+    });
+    return { rows, errors };
+}
+/** Find the actual ORDER ID / CUSTOMER NAME / ITEM NAME header row, not the report title. */
+export function extractOrderBookTable(tables) {
+    for (const table of tables) {
+        const headerIndex = table.findIndex((cells) => ['orderid', 'customername', 'itemname']
+            .every((required) => cells.some((cell) => headerKey(cell) === required)));
+        if (headerIndex >= 0) return dataTableRows(table.slice(headerIndex), ['ORDER ID', 'CUSTOMER NAME', 'ITEM NAME']);
+    }
+    throw new Error('Order Book table not found. Expected ORDER ID, CUSTOMER NAME and ITEM NAME columns.');
+}
