@@ -5,8 +5,8 @@ import { toast } from 'sonner';
 import { ClipboardPaste, FileUp, Upload, RefreshCw } from 'lucide-react';
 import { dyeingService } from '@/services/dyeing.service';
 import { yarnService } from '@/services/yarn.service';
-import { jobCardService } from '@/services/job-card.service';
 import { ordersService } from '@/services/orders.service';
+import { greigeStockService } from '@/services/greige-stock.service';
 import { importsService } from '@/services/imports.service';
 import { errorMessage } from '@/services/http/client';
 import { config } from '@/config/env';
@@ -20,6 +20,101 @@ import { Button } from '@/components/ui/button';
 import { Field, Input, Textarea } from '@/components/ui/field';
 import { DataTable } from '@/components/ui/data-table';
 import { EmptyState, PageHeader, Panel, PanelHeader, Stat } from '@/components/ui/panel';
+
+
+function normalizeU3GreigeSheet(table) {
+    if (!Array.isArray(table) || table.length === 0) {
+        throw new Error('The selected Excel sheet is empty.');
+    }
+
+    const norm = (value) => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const headerIndex = table.findIndex((row) =>
+        Array.isArray(row) && row.some((cell) => norm(cell) === 'item name')
+    );
+
+    if (headerIndex < 0) {
+        throw new Error('Could not find the "Item Name" header in the Excel sheet.');
+    }
+
+    const header = table[headerIndex] ?? [];
+    const subHeader = table[headerIndex + 1] ?? [];
+    const width = Math.max(header.length, subHeader.length);
+    const groups = [];
+    let activeGroup = '';
+    const groupNames = new Set(['opening', 'receipt', 'issue', 'closing', 'last received', 'last issue']);
+
+    for (let i = 0; i < width; i += 1) {
+        const value = norm(header[i]);
+        if (groupNames.has(value)) activeGroup = value;
+        else if (value && !['item name', 'uom', '-', '—'].includes(value)) activeGroup = value;
+        else if (['item name', 'uom'].includes(value)) activeGroup = value;
+        groups[i] = activeGroup;
+    }
+
+    const findSimple = (name) => header.findIndex((cell) => norm(cell) === name);
+    const findGrouped = (group, sub) => {
+        for (let i = 0; i < width; i += 1) {
+            if (groups[i] === group && norm(subHeader[i]) === sub) return i;
+        }
+        return -1;
+    };
+    const findGroupQty = (group, sub) => {
+        const direct = findGrouped(group, sub);
+        if (direct >= 0) return direct;
+        // Some Excel exports put Qty/Kgs labels on the row below a merged group heading.
+        for (let i = 0; i < width; i += 1) {
+            if (groups[i] === group && norm(subHeader[i]).includes(sub)) return i;
+        }
+        return -1;
+    };
+    const itemNameIndex = findSimple('item name');
+    const uomIndex = findSimple('uom');
+    if (itemNameIndex < 0) throw new Error('Could not locate the Item Name column.');
+
+    const readCell = (row, index) => index >= 0 ? row[index] : undefined;
+    const number = (value) => {
+        if (value === undefined || value === null || String(value).trim() === '' || ['-', '—'].includes(String(value).trim())) return 0;
+        const parsed = Number(String(value).replace(/,/g, '').trim());
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
+    const dateValue = (value) => {
+        if (value === undefined || value === null || String(value).trim() === '' || ['-', '—'].includes(String(value).trim())) return null;
+        return value;
+    };
+
+    const columns = {
+        openingQty: findGroupQty('opening', 'qty'),
+        openingQtyKgs: findGroupQty('opening', 'qty kgs'),
+        receiptQty: findGroupQty('receipt', 'qty'),
+        receiptQtyKgs: findGroupQty('receipt', 'qty kgs'),
+        issueQty: findGroupQty('issue', 'qty'),
+        issueQtyKgs: findGroupQty('issue', 'qty kgs'),
+        closingQty: findGroupQty('closing', 'qty'),
+        closingQtyKgs: findGroupQty('closing', 'qty kgs'),
+        lastReceivedDate: findGrouped('last received', 'date'),
+        lastReceivedQtyKgs: findGroupQty('last received', 'qty kgs'),
+        lastIssueDate: findGrouped('last issue', 'date'),
+        lastIssueQtyKgs: findGroupQty('last issue', 'qty kgs'),
+    };
+
+    return table.slice(headerIndex + 2)
+        .filter(Array.isArray)
+        .map((row) => {
+            const itemName = String(readCell(row, itemNameIndex) ?? '').trim();
+            if (!itemName || ['-', '—', 'item name'].includes(norm(itemName))) return null;
+            return {
+                itemName,
+                uom: String(readCell(row, uomIndex) ?? '').trim(),
+                opening: { qty: number(readCell(row, columns.openingQty)), qtyKgs: number(readCell(row, columns.openingQtyKgs)) },
+                receipt: { qty: number(readCell(row, columns.receiptQty)), qtyKgs: number(readCell(row, columns.receiptQtyKgs)) },
+                issue: { qty: number(readCell(row, columns.issueQty)), qtyKgs: number(readCell(row, columns.issueQtyKgs)) },
+                closing: { qty: number(readCell(row, columns.closingQty)), qtyKgs: number(readCell(row, columns.closingQtyKgs)) },
+                lastReceived: { date: dateValue(readCell(row, columns.lastReceivedDate)), qtyKgs: number(readCell(row, columns.lastReceivedQtyKgs)) },
+                lastIssue: { date: dateValue(readCell(row, columns.lastIssueDate)), qtyKgs: number(readCell(row, columns.lastIssueQtyKgs)) },
+            };
+        })
+        .filter(Boolean);
+}
 
 export default function ImportsRouter() {
     const { kind = '' } = useParams();
@@ -91,7 +186,9 @@ function ImportPage({ def }) {
                 const sheet = def.sheet && book.sheetNames.includes(def.sheet) ? def.sheet : book.sheetNames[0];
                 if (def.sheet && sheet !== def.sheet) toast.warning(`Sheet "${def.sheet}" not found, using "${sheet}"`);
                 const table = book.sheetRows(sheet, !!def.knittingFormat || def.backend === 'dyeing');
-                if (def.knittingFormat) {
+                if (def.backend === 'greige-u3') {
+                    finishParse(normalizeU3GreigeSheet(table));
+                } else if (def.knittingFormat) {
                     finishParse(def.knittingFormat === 'planning' ? normalizePlanningSheet(table, selectedFile.name) : normalizeCompletionSheet(table));
                 } else {
                     const required = def.backend === 'dyeing' ? ['Dyeing Schedule Date', 'Dyeing Schedule No.', 'Order ID'] : [];
@@ -155,7 +252,8 @@ function ImportPage({ def }) {
                 try {
                     if (def.backend === 'dyeing') res = await dyeingService.createDyeingPrograms(batch);
                     else if (def.backend === 'yarn') res = await yarnService.createImportedYarnStock(batch, period);
-                    else if (def.backend === 'jobcard') res = await jobCardService.createJobCards(batch);
+                    else if (def.backend === 'greige-u2') res = await greigeStockService.createU2(batch);
+                    else if (def.backend === 'greige-u3') res = await greigeStockService.createU3(batch);
                     else res = await importsService.postRows(def.endpoint, batch, { ...def.extra, ...(def.knittingFormat ? { source: 'excel', source_filename: file?.name ?? '' } : {}) });
                 } catch (error) {
                     // insertMany is not idempotent. Keep only the NOT-YET-UPLOADED
@@ -184,6 +282,7 @@ function ImportPage({ def }) {
             void queryClient.invalidateQueries({ queryKey: ['tracker'] });
             void queryClient.invalidateQueries({ queryKey: ['dyeing-programs'] });
             void queryClient.invalidateQueries({ queryKey: ['yarn-stock'] });
+            void queryClient.invalidateQueries({ queryKey: ['greige-stock'] });
             void queryClient.invalidateQueries({ queryKey: ['orders'] });
         },
         onError: (e) => toast.error(errorMessage(e)),
