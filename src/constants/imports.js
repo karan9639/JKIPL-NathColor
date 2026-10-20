@@ -4,7 +4,7 @@
 // by the existing legacy API before those imports can succeed.
 export const IMPORTS = {
     'dyeing-programs': { title: 'Import Dyeing Programs', description: 'Upload the Dyeing Schedules Status Report (.xlsx) or paste the Excel table, including headers.', source: 'xlsx', allowPaste: true, backend: 'dyeing', accept: '.xlsx,.xls', chunkSize: 100 },
-    'job-cards-opening': { title: 'Import Job Cards Opening', description: 'Upload the job card HTML export from the ERP.', source: 'html', endpoint: '/insertJobCards', accept: '.html,.htm,.xls', chunkSize: 500 },
+    'job-cards-opening': { title: 'Import Job Cards Opening', description: 'Upload the job card HTML export from the ERP.', source: 'html', backend: 'jobcard', accept: '.html,.htm,.xls', chunkSize: 500 },
     'job-cards-closing': { title: 'Import Job Cards Closing', description: 'Upload the closed job cards export. The file is compressed before upload.', source: 'zip', endpoint: '/upload_closed_djc', accept: '.html,.htm,.xls,.xlsx' },
     'greige-stock-u2': { title: 'Import Greige Stock U-2', description: 'Paste Unit-2 stock data or upload an Excel workbook (Fabric Name, Current Stock).', source: 'paste', allowFile: true, endpoint: '/uploadgreigestock', accept: '.xlsx,.xls', extra: { unit: 'U-2' } },
     'greige-stock-u3': { title: 'Import Greige Stock U-3', description: 'Upload the Unit-3 greige stock workbook.', source: 'xlsx', endpoint: '/uploadgreigestock', accept: '.xlsx,.xls', extra: { unit: 'U-3' } },

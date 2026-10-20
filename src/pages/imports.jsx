@@ -5,12 +5,13 @@ import { toast } from 'sonner';
 import { ClipboardPaste, FileUp, Upload, RefreshCw } from 'lucide-react';
 import { dyeingService } from '@/services/dyeing.service';
 import { yarnService } from '@/services/yarn.service';
+import { jobCardService } from '@/services/job-card.service';
 import { ordersService } from '@/services/orders.service';
 import { importsService } from '@/services/imports.service';
 import { errorMessage } from '@/services/http/client';
 import { config } from '@/config/env';
 import { chunk, exportRowsToXlsx, parseClipboardTable, readHtmlTables, readWorkbook, zipFile } from '@/utils/spreadsheet';
-import { extractYarnTable, dataTableRows, extractOrderBookTable, normalizeOrderBookRecords } from '@/utils/import-mappers';
+import { extractYarnTable, dataTableRows } from '@/utils/import-mappers';
 import { COMPLETION_TEMPLATE, normalizeCompletionSheet, normalizePlanningSheet } from '@/utils/knitting';
 import { humanizeKey } from '@/utils/format';
 import { IMPORTS } from '@/constants/imports';
@@ -43,9 +44,7 @@ function ImportPage({ def }) {
     const [savedPage, setSavedPage] = useState(1);
 
     const finishParse = (sourceRows) => {
-        const { rows: clean, errors } = def.backend === 'orderbook'
-            ? normalizeOrderBookRecords(sourceRows)
-            : normalizeRecords(def, sourceRows);
+        const { rows: clean, errors } = normalizeRecords(def, sourceRows);
         setRows(clean);
         setIssues(errors);
         setResult(null);
@@ -67,13 +66,13 @@ function ImportPage({ def }) {
                 let table;
                 if (/\.(html?|htm)$/i.test(selectedFile.name) || looksLikeHtml) {
                     const tables = await readHtmlTables(selectedFile);
-                    table = extractOrderBookTable(tables);
+                    table = [...tables].sort((a, b) => b.length - a.length)[0] ?? [];
                 } else {
                     const book = await readWorkbook(selectedFile);
                     const sheet = book.sheetNames[0];
-                    table = extractOrderBookTable([book.sheetRows(sheet, false)]);
+                    table = book.sheetRows(sheet, false);
                 }
-                finishParse(table);
+                finishParse(dataTableRows(table, [], 3));
             } else if (def.source === 'html') {
                 const tables = await readHtmlTables(selectedFile);
                 if (def.backend === 'yarn') {
@@ -156,6 +155,7 @@ function ImportPage({ def }) {
                 try {
                     if (def.backend === 'dyeing') res = await dyeingService.createDyeingPrograms(batch);
                     else if (def.backend === 'yarn') res = await yarnService.createImportedYarnStock(batch, period);
+                    else if (def.backend === 'jobcard') res = await jobCardService.createJobCards(batch);
                     else res = await importsService.postRows(def.endpoint, batch, { ...def.extra, ...(def.knittingFormat ? { source: 'excel', source_filename: file?.name ?? '' } : {}) });
                 } catch (error) {
                     // insertMany is not idempotent. Keep only the NOT-YET-UPLOADED
