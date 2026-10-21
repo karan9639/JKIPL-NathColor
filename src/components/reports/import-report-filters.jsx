@@ -52,9 +52,6 @@ export function ImportReportFilters({ kind, onApply, onRefresh, loading = false 
         </div>
       </div>
       {validation && <p role="alert" className="mt-2 text-sm text-danger">{validation}</p>}
-      <p className="mt-2 text-xs text-muted-foreground">{kind === 'yarn'
-        ? 'The backend filters report periods by their To date. Leave on Latest report for the newest uploaded stock snapshot.'
-        : 'Dates filter the dyeing schedule date. Leave on Latest report to view the most recently uploaded schedule.'}</p>
     </form>;
 }
 

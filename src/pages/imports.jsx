@@ -312,15 +312,6 @@ function ImportPage({ def }) {
     const savedColumns = savedPreview[0] ? Object.keys(savedPreview[0]).filter((key) => !['_id', '__v'].includes(key)).slice(0, 12).map((key) => ({ key, label: humanizeKey(key) })) : [];
     return (<>
       <PageHeader title={def.title} description={def.description}/>
-      {!def.backend && <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
-        This import uses the legacy API route <code className="break-all font-mono">{def.endpoint}</code>, which is not provided in the supplied Express backend. {config.legacyApiBaseUrl ? 'Requests are directed to your configured legacy service. That service must implement and authorize this route.' : 'If your legacy API runs separately, set VITE_LEGACY_API_BASE_URL in .env and restart Vite. Otherwise this upload will return 404.'}
-      </div>}
-      {def.knittingFormat && (<div className="rounded-md border border-border bg-surface px-4 py-3 text-sm text-muted-foreground">
-          {def.knittingFormat === 'planning' ? <p>Reads only the <strong>PO</strong> worksheet. Identical fabric names under one PO remain separate source rows. SOURCE_FILE + SOURCE_SHEET + SOURCE_ROW_NUMBER are passed to the backend for reconciliation.</p> : <div className="flex flex-wrap items-center justify-between gap-2">
-              <p>Use stable <strong>PRODUCTION_EVENT_ID</strong> values for idempotent uploads. <strong>PO_LINE_ID</strong> comes from the PO tracker export.</p>
-              <Button size="sm" variant="outline" onClick={() => void exportRowsToXlsx(COMPLETION_TEMPLATE, Object.keys(COMPLETION_TEMPLATE[0]), 'knitting-completion-template', 'KNITTING_COMPLETION')}>Download blank template</Button>
-            </div>}
-        </div>)}
       <Panel>
         <PanelHeader title="1. Select import data"/>
         <div className="flex flex-col gap-5 p-4">

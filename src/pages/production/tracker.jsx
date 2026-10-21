@@ -257,9 +257,7 @@ export default function TrackerPage() {
       </div>
     </Panel>
 
-    {pos.error && <p className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="status">Knitting PO data is not available from the server yet ({errorMessage(pos.error)}). Existing job-card tracking still works. Implement the new backend endpoints described in <code>KNITTING_BACKEND_CONTRACT.md</code>.</p>}
-    {!pos.error && !pos.isLoading && !allLines.length && <p className="mb-3 rounded-md border border-border p-3 text-sm text-muted-foreground">No PO planning lines imported yet. Import the consolidated <b>PO</b> worksheet first; existing dyeing records remain available below.</p>}
-    {config.useMockApi && <p className="mb-3 text-xs text-muted-foreground">Demo mode: Knitting entries and Excel imports are sample/in-memory only; a refresh clears these updates.</p>}
+    
     <div className="mb-5">
       <DataTable rows={filteredPO} columns={poColumns} isLoading={pos.isLoading} searchable={false} title="Knitting PO lines" description="Click a line to record production or link its job card" onRowClick={(r) => setLine(r)} exportName="knitting-po-tracker" emptyDescription="Try clearing the date filters or import a PO planner."/>
     </div>
