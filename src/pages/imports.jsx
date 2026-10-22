@@ -234,7 +234,7 @@ function ImportPage({ def }) {
       <PageHeader title={def.title} description={def.description}/>
       {def.knittingFormat === 'planning' && <div className="mb-4 rounded-lg border border-border bg-surface p-4 text-sm">
         <p className="font-semibold">Unit-3 uses only the consolidated PO sheet</p>
-        <p className="mt-1 text-muted-foreground">The REMARKS cell controls the planning status: CLOSED = closed in the planner. HOLD and other notes remain separate. Update the same workbook and reimport it to refresh the status. The weekly machine grids, job card linking and separate completion sheets are not required.</p>
+        <p className="mt-1 text-muted-foreground">Update the same workbook and reimport it to refresh the status. The weekly machine grids, job card linking and separate completion sheets are not required.</p>
       </div>}
       <Panel>
         <PanelHeader title="1. Select import data"/>
