@@ -61,7 +61,7 @@ export function ImportReportPagination({ pagination, onPageChange, disabled = fa
     const end = Math.min(pagination.totalEntries, start + pagination.limit - 1);
     return <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
       <p className="text-muted-foreground">Showing <strong className="text-foreground">{start}–{end}</strong> of <strong className="text-foreground">{pagination.totalEntries.toLocaleString('en-IN')}</strong> records</p>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2" aria-label="Report pagination">
         <Button type="button" size="sm" variant="outline" disabled={disabled || !pagination.hasPrevPage} onClick={() => onPageChange(pagination.currentPage - 1)}>Previous</Button>
         <span className="tabular whitespace-nowrap">Page {pagination.currentPage} / {pagination.totalPages}</span>
         <Button type="button" size="sm" variant="outline" disabled={disabled || !pagination.hasNextPage} onClick={() => onPageChange(pagination.currentPage + 1)}>Next</Button>

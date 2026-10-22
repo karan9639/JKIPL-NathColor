@@ -104,7 +104,7 @@ export default function StageEntryPage({ stage }) {
                 <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
                   {DETAIL_KEYS.map(([label, keys]) => (<div key={label} className="min-w-0">
                       <dt className="text-xs text-muted-foreground">{label}</dt>
-                      <dd className="truncate font-medium">{formatCell(pickString(card, ...keys))}</dd>
+                      <dd className="break-words font-medium">{formatCell(pickString(card, ...keys))}</dd>
                     </div>))}
                 </dl>
 
@@ -121,10 +121,10 @@ export default function StageEntryPage({ stage }) {
 
                 <form className="flex flex-col gap-4 border-t border-border pt-4" onSubmit={(e) => {
                 e.preventDefault();
-                submit.mutate();
+                if (!submit.isPending && !missingRequired) submit.mutate();
             }}>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    {stage.fields.map((f) => (<Field key={f.name} label={f.label} htmlFor={f.name}>
+                    {stage.fields.map((f) => (<Field key={f.name} label={f.label} htmlFor={f.name} required={f.required}>
                         {f.type === 'select' ? (<Select id={f.name} required={f.required} value={values[f.name]} onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}>
                             <option value="">Select…</option>
                             {f.options?.map((o) => (<option key={o} value={o}>
@@ -136,7 +136,7 @@ export default function StageEntryPage({ stage }) {
                   <Field label="Remarks (optional)" htmlFor="remarks">
                     <Textarea id="remarks" rows={2} value={remarks} onChange={(e) => setRemarks(e.target.value)}/>
                   </Field>
-                  <div className="flex justify-end gap-2">
+                  <div className="flex flex-wrap justify-end gap-2">
                     <Button variant="outline" onClick={() => setCard(null)}>
                       Cancel
                     </Button>

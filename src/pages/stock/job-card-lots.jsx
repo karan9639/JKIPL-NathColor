@@ -14,7 +14,7 @@ import { readJobCardLotsPage } from '@/utils/job-card-lots';
 const columns = [
   { key: 'manualLotNo', label: 'MANUAL LOT NO', render: (r) => <span className="font-medium">{r.manualLotNo || '—'}</span> },
   { key: 'orderId', label: 'ORDER ID' },
-  { key: 'itemName', label: 'ITEM NAME', className: 'max-w-72' },
+  { key: 'itemName', label: 'ITEM NAME', className: 'max-w-72 truncate' },
   { key: 'quantity', label: 'QUANTITY', align: 'right', render: (r) => formatNumber(r.quantity, 3) },
   { key: 'kgs', label: 'KGS', align: 'right', render: (r) => formatNumber(r.kgs, 3) },
   { key: 'jobCardNo', label: 'JOB CARD NO' },

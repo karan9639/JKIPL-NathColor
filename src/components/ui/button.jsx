@@ -9,13 +9,13 @@ const variants = {
     danger: 'bg-danger text-white hover:bg-danger/90',
 };
 const sizes = {
-    sm: 'h-8 px-3 text-sm gap-1.5',
+    sm: 'h-9 px-3 text-sm gap-1.5',
     md: 'h-10 px-4 text-sm gap-2',
     lg: 'h-12 px-5 text-base gap-2',
     icon: 'size-10',
 };
 export const Button = forwardRef(function Button({ className, variant = 'primary', size = 'md', loading, disabled, children, type = 'button', ...props }, ref) {
-    return (<button ref={ref} type={type} disabled={disabled || loading} className={cn('inline-flex shrink-0 items-center justify-center rounded-md font-medium whitespace-nowrap transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0', variants[variant], sizes[size], className)} {...props}>
+    return (<button ref={ref} type={type} aria-busy={loading || undefined} disabled={disabled || loading} className={cn('inline-flex shrink-0 items-center justify-center rounded-md font-medium whitespace-nowrap transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0', variants[variant], sizes[size], className)} {...props}>
       {loading && <Loader2 className="animate-spin" aria-hidden="true"/>}
       {children}
     </button>);

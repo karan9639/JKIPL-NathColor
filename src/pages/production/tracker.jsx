@@ -52,7 +52,7 @@ function Detail({ row }) {
     ['Jet (ERP / production)', row.JETLOADING_MACHINE || row.JETNO],
   ];
   return <div className="space-y-5">
-    <div className="grid grid-cols-2 gap-x-5 gap-y-3 rounded-lg bg-muted/50 p-3">
+    <div className="grid grid-cols-1 gap-x-5 gap-y-3 rounded-lg min-[400px]:grid-cols-2 bg-muted/50 p-3">
       {details.map(([label, value]) => <div key={label} className="min-w-0">
         <p className="text-xs text-muted-foreground">{label}</p>
         <p className="break-words text-sm font-medium">{value || '—'}</p>
@@ -129,6 +129,13 @@ export default function TrackerPage() {
     </Panel>
     <DataTable
       rows={rows} columns={columns} title="Job card / lot records"
+      mobileRow={row => <button type="button" onClick={() => setSelected(row)} className="block w-full p-4 text-left hover:bg-muted focus-visible:outline-offset-[-2px]" aria-label={`View timeline for job card ${row.JOBCARDNO}, lot ${row.MANUALLOTNO}`}>
+        <span className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-semibold text-primary">Job card {row.JOBCARDNO || '—'}</span><Badge tone={statusTone[row.STAGE_STATUS]}>{row.STAGE_STATUS}</Badge></span>
+        <span className="mt-2 block text-sm">{row.ITEMNAME || 'Item not supplied'}</span>
+        <span className="mt-2 block text-xs text-muted-foreground">Order {row.ORDERID || '—'} · Lot {row.MANUALLOTNO || '—'}</span>
+        <span className="mt-1 block text-xs text-muted-foreground">{formatNumber(row.KGS, 3)} KG · {row.OPENED_DISPLAY}</span>
+        <span className="mt-3 block text-xs font-medium">{row.LATEST_STAGE} · View recorded timeline</span>
+      </button>}
       description="Click any row for a chronological event timeline. Dates no longer show raw ISO strings."
       isLoading={query.isPending} error={query.isError ? errorMessage(query.error) : null}
       onRetry={() => query.refetch()} onRowClick={setSelected}

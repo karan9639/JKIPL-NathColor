@@ -33,8 +33,8 @@ export default function FabricMappingPage() {
     return (<>
       <PageHeader title="Fabric Name Mapping" description="Link greige stock fabric names to their ERP item names. Click a row to edit."/>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-        <Stat label="Stock names" value={rows.length}/>
-        <Stat label="Unmapped" value={unmapped} tone="accent"/>
+        <Stat label="Stock names" value={mappings.isLoading || mappings.isError ? '—' : rows.length}/>
+        <Stat label="Unmapped" value={mappings.isLoading || mappings.isError ? '—' : unmapped} tone="accent"/>
         <Stat label="ERP items" value={erpNames.data?.length ?? '…'}/>
       </div>
       <DataTable rows={rows} columns={columns} isLoading={mappings.isLoading} error={mappings.error ? errorMessage(mappings.error) : null} onRetry={() => mappings.refetch()} exportName="fabric-mapping" onRowClick={(r) => {
@@ -51,7 +51,7 @@ export default function FabricMappingPage() {
           </>}>
         <form id="mapping-form" onSubmit={(e) => {
             e.preventDefault();
-            save.mutate();
+            if (!save.isPending && erp.trim()) save.mutate();
         }}>
           <Field label="ERP item name" htmlFor="erp-name" hint="Start typing to pick from ERP greige names.">
             <Input id="erp-name" list="erp-names" autoFocus value={erp} onChange={(e) => setErp(e.target.value)}/>

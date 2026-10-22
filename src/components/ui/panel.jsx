@@ -2,7 +2,7 @@ import { AlertTriangle, Inbox, Loader2 } from 'lucide-react';
 import { cn } from '@/utils/format';
 import { Button } from './button';
 export function Panel({ className, children }) {
-    return <section className={cn('rounded-lg border border-border bg-surface', className)}>{children}</section>;
+    return <section className={cn('min-w-0 rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgb(23_32_26/0.03)]', className)}>{children}</section>;
 }
 export function PanelHeader({ title, description, actions }) {
     return (<div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -19,11 +19,11 @@ export function PageHeader({ title, description, actions }) {
         <h1 className="text-balance text-xl font-semibold tracking-tight text-foreground sm:text-2xl">{title}</h1>
         {description && <p className="mt-1 text-pretty text-sm text-muted-foreground">{description}</p>}
       </div>
-      {actions && <div className="no-print flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="no-print flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
     </header>);
 }
 export function Stat({ label, value, tone = 'default', hint }) {
-    return (<div className={cn('rounded-lg border px-4 py-3', tone === 'primary' && 'border-primary/20 bg-primary-soft', tone === 'accent' && 'border-accent/20 bg-accent-soft', tone === 'default' && 'border-border bg-surface')}>
+    return (<div className={cn('min-w-0 rounded-xl border px-3 py-4 sm:px-4', tone === 'primary' && 'border-primary/20 bg-primary-soft', tone === 'accent' && 'border-accent/20 bg-accent-soft', tone === 'default' && 'border-border bg-surface')}>
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className={cn('tabular mt-1 text-xl font-semibold', tone === 'primary' && 'text-primary', tone === 'accent' && 'text-accent')}>{value}</p>
       {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
@@ -35,9 +35,9 @@ export function Badge({ children, tone = 'neutral' }) {
     </span>);
 }
 export function LoadingState({ label = 'Loading…' }) {
-    return (<div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground" role="status">
-      <Loader2 className="size-4 animate-spin" aria-hidden="true"/>
-      {label}
+    return (<div className="space-y-4 px-4 py-8 text-sm text-muted-foreground" role="status" aria-live="polite" aria-busy="true">
+      <div className="flex items-center justify-center gap-2"><Loader2 className="size-4 animate-spin" aria-hidden="true"/>{label}</div>
+      <div className="mx-auto grid w-full max-w-3xl gap-3 motion-safe:animate-pulse" aria-hidden="true">{[0, 1, 2].map(index => <div key={index} className="flex gap-3"><span className="h-3 w-1/4 rounded bg-muted"/><span className="h-3 flex-1 rounded bg-muted"/><span className="h-3 w-1/6 rounded bg-muted"/></div>)}</div>
     </div>);
 }
 export function EmptyState({ title, description, action }) {

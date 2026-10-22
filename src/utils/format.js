@@ -13,6 +13,7 @@ export function toNumber(value) {
     return 0;
 }
 export function formatNumber(value, digits = 2) {
+    if (value == null || (typeof value === 'string' && !value.trim()) || !isNumericLike(value)) return '—';
     return toNumber(value).toLocaleString('en-IN', {
         minimumFractionDigits: 0,
         maximumFractionDigits: digits,

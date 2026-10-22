@@ -1,3 +1,6 @@
+import { useMemo, useState } from 'react';
+import { Field, Input } from '@/components/ui/field';
+import { Button } from '@/components/ui/button';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
@@ -7,7 +10,8 @@ import { reportsService } from '@/services/reports.service';
 import { useAuth } from '@/hooks/useAuth';
 import { NAV_GROUPS } from '@/constants/navigation';
 import { formatDate, parseLooseDate, toNumber } from '@/utils/format';
-import { Badge, PageHeader, Panel, PanelHeader, Stat, LoadingState } from '@/components/ui/panel';
+import { errorMessage } from '@/services/http/client';
+import { Badge, PageHeader, Panel, PanelHeader, Stat, LoadingState, EmptyState, ErrorState } from '@/components/ui/panel';
 const SERIES = [
     { key: 'Jet', color: 'var(--color-primary)' },
     { key: 'HeatS', color: 'var(--color-accent)' },
@@ -28,7 +32,15 @@ export default function DashboardPage() {
     const { username, user, can } = useAuth();
     const records = useQuery({ queryKey: ['records'], queryFn: productionService.records });
     const lud = useQuery({ queryKey: ['lud'], queryFn: reportsService.lud });
-    const rows = [...(records.data ?? [])].sort((a, b) => String(a.Date).localeCompare(String(b.Date)));
+    const [from, setFrom] = useState('');
+    const [to, setTo] = useState('');
+    const rows = useMemo(() => [...(records.data ?? [])].filter(row => {
+        const date = parseLooseDate(row.Date);
+        if (!from && !to) return true;
+        if (!date) return false;
+        const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        return (!from || day >= from) && (!to || day <= to);
+    }).sort((a, b) => (parseLooseDate(a.Date)?.getTime() ?? 0) - (parseLooseDate(b.Date)?.getTime() ?? 0)), [records.data, from, to]);
     const latest = rows.at(-1);
     const chartData = rows.slice(-10).map((r) => ({ ...r, label: formatDate(r.Date).slice(0, 6) }));
     const quickLinks = NAV_GROUPS.filter((g) => ['Orders', 'Production', 'Inventory'].includes(g.label)).flatMap((g) => g.items).filter(can).slice(0, 8);
@@ -39,7 +51,13 @@ export default function DashboardPage() {
 
       <PageHeader title={`Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${displayName}`} description={latest ? `Production activity for ${formatDate(latest.Date)}` : 'Production activity overview'}/>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+      <Panel className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
+        <Field label="From date" htmlFor="dashboard-from"><Input id="dashboard-from" type="date" value={from} max={to || undefined} onChange={event => setFrom(event.target.value)} /></Field>
+        <Field label="To date" htmlFor="dashboard-to"><Input id="dashboard-to" type="date" value={to} min={from || undefined} onChange={event => setTo(event.target.value)} /></Field>
+        {(from || to) && <Button variant="ghost" onClick={() => { setFrom(''); setTo(''); }}>Clear dates</Button>}
+        <p className="text-xs text-muted-foreground sm:ml-auto">KPIs show the latest recorded day in this range.</p>
+      </Panel>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 min-[1600px]:grid-cols-7">
         {[
             ['Greige req.', 'GREQ'],
             ['Job cards', 'JobCards'],
@@ -48,14 +66,14 @@ export default function DashboardPage() {
             ['Jet loaded', 'Jet'],
             ['Heat set', 'HeatS'],
             ['Finished', 'Finish'],
-        ].map(([label, key], i) => (<Stat key={key} label={label} value={records.isLoading ? '…' : toNumber(latest?.[key]).toLocaleString('en-IN')} tone={i === 4 ? 'primary' : 'default'}/>))}
+        ].map(([label, key], i) => (<Stat key={key} label={label} value={records.isLoading ? '…' : records.isError || latest?.[key] == null ? '—' : toNumber(latest[key]).toLocaleString('en-IN')} tone={i === 4 ? 'primary' : 'default'}/>))}
       </div>
 
       <div className="grid gap-5 xl:grid-cols-3">
         <Panel className="xl:col-span-2">
-          <PanelHeader title="Stage throughput" description="Job cards processed per day, last 10 days"/>
+          <PanelHeader title="Stage throughput" description="Job cards processed per day · latest 10 recorded days in range"/>
           <div className="h-72 p-4">
-            {records.isLoading ? (<LoadingState />) : (<ResponsiveContainer width="100%" height="100%">
+            {records.isLoading ? (<LoadingState />) : records.isError ? <ErrorState message={errorMessage(records.error)} onRetry={() => records.refetch()} /> : !chartData.length ? <EmptyState title="No production records" description="Recorded daily activity will appear here." /> : (<ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)"/>
                   <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12}/>
@@ -70,7 +88,7 @@ export default function DashboardPage() {
 
         <Panel>
           <PanelHeader title="Data freshness" description="Last update of each source" actions={<Link to="/reports/lud" className="text-xs font-medium text-primary hover:underline">View all</Link>}/>
-          {lud.isLoading ? (<LoadingState />) : (<ul className="divide-y divide-border">
+          {lud.isLoading ? (<LoadingState />) : lud.isError ? <ErrorState message={errorMessage(lud.error)} onRetry={() => lud.refetch()} /> : !lud.data?.length ? <EmptyState title="No source updates" /> : (<ul className="divide-y divide-border">
               {(lud.data ?? []).map((r) => {
                 const f = freshness(r.LUD);
                 return (<li key={String(r.Report)} className="flex items-center justify-between gap-3 px-4 py-2.5">

@@ -3,7 +3,8 @@ import { ArrowDown, ArrowUp, ArrowUpDown, Download, Search } from 'lucide-react'
 import { cn, formatCell, humanizeKey, isNumericLike, rowField, toNumber } from '@/utils/format';
 import { exportRowsToXlsx } from '@/utils/spreadsheet';
 import { Button } from './button';
-import { Input } from './field';
+import { Input, Select } from './field';
+import { Dialog } from './dialog';
 import { EmptyState, ErrorState, LoadingState, Panel } from './panel';
 function inferColumns(rows) {
     const first = rows[0];
@@ -13,10 +14,12 @@ function inferColumns(rows) {
         .filter((k) => typeof first[k] !== 'object' || first[k] === null)
         .map((key) => ({ key, align: rows.slice(0, 10).every((r) => r[key] === '' || r[key] == null || isNumericLike(r[key])) ? 'right' : 'left' }));
 }
-export function DataTable({ rows, columns, title, description, isLoading, error, onRetry, searchable = true, exportName, toolbar, footer, emptyTitle = 'No records found', emptyDescription, onRowClick, maxHeight = '70vh', }) {
+export function DataTable({ rows = [], columns, title, description, isLoading, isFetching, error, onRetry, searchable = true, exportName, toolbar, footer, emptyTitle = 'No records found', emptyDescription, onRowClick, maxHeight = '70vh', mobileRow, }) {
     const [query, setQuery] = useState('');
     const [sort, setSort] = useState(null);
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(50);
+    const [cellDetail, setCellDetail] = useState(null);
     const deferredQuery = useDeferredValue(query);
     const filterId = useId();
     const cols = useMemo(() => columns ?? inferColumns(rows), [columns, rows]);
@@ -33,6 +36,13 @@ export function DataTable({ rows, columns, title, description, isLoading, error,
             const col = cols.find((c) => c.key === sort.key);
             const getter = col?.sortValue ?? ((r) => (col?.align === 'right' ? toNumber(rowField(r, sort.key)) : String(rowField(r, sort.key) ?? '')));
             out = [...out].sort((a, b) => {
+                const rawA = rowField(a, sort.key);
+                const rawB = rowField(b, sort.key);
+                if (!col?.sortValue) {
+                    const missingA = rawA == null || rawA === '';
+                    const missingB = rawB == null || rawB === '';
+                    if (missingA || missingB) return missingA === missingB ? 0 : missingA ? 1 : -1;
+                }
                 const av = getter(a);
                 const bv = getter(b);
                 const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv), undefined, { numeric: true });
@@ -41,7 +51,6 @@ export function DataTable({ rows, columns, title, description, isLoading, error,
         }
         return out;
     }, [rows, deferredQuery, sort, cols]);
-    const pageSize = 100;
     const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
     const currentPage = Math.min(page, totalPages);
     const pageRows = visible.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -53,7 +62,8 @@ export function DataTable({ rows, columns, title, description, isLoading, error,
             {title && <h2 className="text-sm font-semibold">{title}</h2>}
             <p className="text-xs text-muted-foreground">
               {description ? `${description} · ` : ''}
-              <span className="tabular">{visible.length.toLocaleString('en-IN')}</span>
+              <span className="tabular">{isLoading || error ? '—' : visible.length.toLocaleString('en-IN')}</span>
+              {(isFetching || query !== deferredQuery) && <span role="status" className="ml-2 text-primary">Updating…</span>}
               {visible.length !== rows.length && <> of <span className="tabular">{rows.length.toLocaleString('en-IN')}</span></>} rows
             </p>
           </div>
@@ -66,21 +76,22 @@ export function DataTable({ rows, columns, title, description, isLoading, error,
                 </label>
                 <Input id={filterId} value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="Filter rows…" className="h-9 pl-9"/>
               </div>)}
-            {exportName && (<Button variant="outline" size="sm" className="h-9" disabled={!visible.length} onClick={() => exportRowsToXlsx(visible.map((row) => Object.fromEntries(cols.map((c) => [c.key, rowField(row, c.key) ?? '']))), cols.map((c) => c.key), exportName)}>
+            {exportName && (<Button variant="outline" size="sm" className="h-9" disabled={!visible.length || isLoading || !!error || query !== deferredQuery} onClick={() => exportRowsToXlsx(visible.map((row) => Object.fromEntries(cols.map((c) => [c.key, rowField(row, c.key) ?? '']))), cols.map((c) => c.key), exportName)}>
                 <Download aria-hidden="true"/>
                 Export
               </Button>)}
           </div>
         </div>)}
 
-      {isLoading ? (<LoadingState />) : error ? (<ErrorState message={error} onRetry={onRetry}/>) : !visible.length ? (<EmptyState title={rows.length ? 'No rows match your filter' : emptyTitle} description={rows.length ? undefined : emptyDescription}/>) : (<div className="overflow-auto" style={{ maxHeight }}>
+      {isLoading ? (<LoadingState />) : error ? (<ErrorState message={error} onRetry={onRetry}/>) : !visible.length ? (<EmptyState title={rows.length ? 'No rows match your filter' : emptyTitle} description={rows.length ? undefined : emptyDescription}/>) : (<><div role="region" aria-label={`${title || 'Records'} — scroll to view all columns`} tabIndex={0} className={cn('min-w-0 overflow-auto overscroll-contain focus-visible:outline-offset-[-2px]', mobileRow && 'hidden md:block')} style={{ maxHeight }}>
           <table className="w-full border-collapse text-sm">
+            <caption className="sr-only">{title || 'Records'}{onRowClick ? '. Select a row to view details.' : ''}</caption>
             <thead className="sticky top-0 z-10 bg-muted">
               <tr>
                 {cols.map((c) => {
                 const active = sort?.key === c.key;
                 return (<th key={c.key} scope="col" aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'} className={cn('border-b border-border px-3 py-2 text-xs font-semibold whitespace-nowrap text-muted-foreground', c.align === 'right' ? 'text-right' : 'text-left')}>
-                      <button type="button" onClick={() => toggleSort(c.key)} className={cn('inline-flex items-center gap-1 hover:text-foreground', c.align === 'right' && 'flex-row-reverse')}>
+                      <button type="button" onClick={() => toggleSort(c.key)} className={cn('inline-flex min-h-8 items-center gap-1.5 hover:text-foreground', c.align === 'right' && 'flex-row-reverse')}>
                         {c.label ?? humanizeKey(c.key)}
                         {active ? sort.dir === 'asc' ? <ArrowUp className="size-3" aria-hidden="true"/> : <ArrowDown className="size-3" aria-hidden="true"/> : <ArrowUpDown className="size-3 opacity-40" aria-hidden="true"/>}
                       </button>
@@ -89,22 +100,24 @@ export function DataTable({ rows, columns, title, description, isLoading, error,
               </tr>
             </thead>
             <tbody>
-              {pageRows.map((row, i) => (<tr key={i} onClick={onRowClick ? () => onRowClick(row) : undefined} onKeyDown={onRowClick ? (e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onRowClick(row)) : undefined} tabIndex={onRowClick ? 0 : undefined} className={cn('border-b border-border/70 last:border-0 even:bg-muted/30', onRowClick && 'cursor-pointer hover:bg-primary-soft/60 focus-visible:bg-primary-soft/60')}>
+              {pageRows.map((row, i) => (<tr key={i} onClick={onRowClick ? () => onRowClick(row) : undefined} onKeyDown={onRowClick ? (e) => e.target === e.currentTarget && !e.nativeEvent.isComposing && e.keyCode !== 229 && (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onRowClick(row)) : undefined} tabIndex={onRowClick ? 0 : undefined} className={cn('border-b border-border/70 transition-colors duration-150 last:border-0 even:bg-muted/20 hover:bg-primary-soft/40', onRowClick && 'cursor-pointer hover:bg-primary-soft/60 focus-visible:bg-primary-soft/60')}>
                   {cols.map((c) => (<td key={c.key} className={cn('px-3 py-2 align-top whitespace-nowrap', c.align === 'right' && 'tabular text-right', c.className)}>
-                      {c.render ? c.render(row) : formatCell(rowField(row, c.key))}
+                      {c.className?.includes('truncate') ? <button type="button" title={formatCell(rowField(row, c.key))} className="block max-w-full truncate text-left underline decoration-border underline-offset-4 hover:decoration-primary" aria-label={`View full ${c.label ?? humanizeKey(c.key)}: ${formatCell(rowField(row, c.key))}`} onClick={(event) => { event.stopPropagation(); setCellDetail({ title: c.label ?? humanizeKey(c.key), value: formatCell(rowField(row, c.key)) }); }}>{c.render ? c.render(row) : formatCell(rowField(row, c.key))}</button> : c.render ? c.render(row) : formatCell(rowField(row, c.key))}
                     </td>))}
                 </tr>))}
             </tbody>
           </table>
-        </div>)}
-      {visible.length > pageSize && !isLoading && !error && <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3 text-xs text-muted-foreground">
+        </div>{mobileRow && <div className="divide-y divide-border md:hidden">{pageRows.map((row, index) => <div key={row._id ?? index}>{mobileRow(row)}</div>)}</div>}</>)}
+      {!!visible.length && !isLoading && !error && <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3 text-xs text-muted-foreground">
         <span>Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, visible.length)} of {visible.length.toLocaleString('en-IN')} rows</span>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor={`${filterId}-size`} className="sr-only">Rows per page</label><Select id={`${filterId}-size`} className="h-9 w-24 text-xs" value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}>{[25, 50, 100].map(size => <option key={size} value={size}>{size} rows</option>)}</Select>
           <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Previous</Button>
           <span className="tabular">{currentPage} / {totalPages}</span>
           <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next</Button>
         </div>
       </div>}
       {footer && <div className="border-t border-border px-4 py-3">{footer}</div>}
+      <Dialog open={!!cellDetail} onOpenChange={open => !open && setCellDetail(null)} title={cellDetail?.title || 'Full value'}><p className="whitespace-pre-wrap break-words text-sm">{cellDetail?.value}</p></Dialog>
     </Panel>);
 }

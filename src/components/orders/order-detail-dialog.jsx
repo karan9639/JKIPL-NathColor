@@ -33,16 +33,16 @@ export function OrderDetailDialog({ order, onClose }) {
   const first = orders[0] || {};
   const orderedByUom = info?.summary?.orderedByUom || orders.reduce((map, o) => {
     const unit = String(o.uom || 'UNSPECIFIED').trim().toUpperCase();
-    map[unit] = (map[unit] || 0) + (Number(o.quantity) || 0); return map;
+    if (o.quantity != null && o.quantity !== '') map[unit] = (map[unit] || 0) + (Number(o.quantity) || 0); return map;
   }, {});
   return <Dialog open={!!order} onOpenChange={open => !open && onClose()} title={`ERP Order ${orderId || '—'}`} description="Imported order facts and linked ERP records" className="max-w-4xl">
-    {!!order && <div className="max-h-[72vh] overflow-y-auto pb-3">
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-4">
+    {!!order && <div className="min-w-0 pb-3">
+      <dl className="grid grid-cols-1 gap-x-4 gap-y-3 text-sm min-[400px]:grid-cols-2 lg:grid-cols-4">
         {orderFields.map(([label,key]) => <div key={key} className="min-w-0"><dt className="text-xs text-muted-foreground">{label}</dt><dd className="break-words font-medium">{key==='receivedDate'&&first[key] ? formatDate(first[key]) : display(first[key])}</dd></div>)}
       </dl>
       <div className="mt-4 rounded-md border border-border p-3">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Ordered quantity by actual ERP UOM</h3>
-        <div className="mt-2 flex flex-wrap gap-4">{Object.entries(orderedByUom).map(([unit,value]) => <div key={unit}><strong className="text-lg tabular-nums">{qty(value,unit)}</strong></div>)}</div>
+        <div className="mt-2 flex flex-wrap gap-4">{!Object.keys(orderedByUom).length && <span className="text-sm text-muted-foreground">Quantity not imported</span>}{Object.entries(orderedByUom).map(([unit,value]) => <div key={unit}><strong className="text-lg tabular-nums">{qty(value,unit)}</strong></div>)}</div>
         <p className="mt-1 text-xs text-muted-foreground">No KG/MTR/LB conversion or dispatch balance is assumed.</p>
       </div>
       {detail.isPending && <p className="mt-4 text-sm text-muted-foreground">Loading linked dyeing/job-card records…</p>}

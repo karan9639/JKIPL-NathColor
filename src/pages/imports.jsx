@@ -60,6 +60,7 @@ function ImportPage({ def }) {
         else if (!clean.length) toast.error('No data rows found. Check the report and headers.');
     };
     const parseFile = async (selectedFile) => {
+        if (parsing || upload.isPending) return;
         setFile(selectedFile);
         setRows([]);
         setIssues([]);
@@ -199,8 +200,9 @@ function ImportPage({ def }) {
             void queryClient.invalidateQueries({ queryKey: ['yarn-stock'] });
             void queryClient.invalidateQueries({ queryKey: ['greige-stock'] });
             void queryClient.invalidateQueries({ queryKey: ['orders'] });
+            for (const key of ['order-book', 'order-summary', 'order-tracker', 'job-card-lots', 'records', 'report', 'lud']) void queryClient.invalidateQueries({ queryKey: [key] });
         },
-        onError: (e) => { setUploadError({ status: e.status, code: e.code, message: errorMessage(e) }); toast.error(errorMessage(e)); },
+        onError: (e) => { setUploadError({ status: e.status, code: e.code, message: errorMessage(e) }); },
         onSettled: () => setProgress(null),
     });
     const loadSaved = async (page = 1) => {
@@ -232,6 +234,12 @@ function ImportPage({ def }) {
     const savedColumns = savedPreview[0] ? Object.keys(savedPreview[0]).filter((key) => !['_id', '__v'].includes(key)).slice(0, 12).map((key) => ({ key, label: humanizeKey(key) })) : [];
     return (<>
       <PageHeader title={def.title} description={def.description}/>
+      <ol className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4" aria-label="Import progress">
+        {['Select data', 'Preview & validate', 'Upload', 'Result'].map((step, index) => {
+          const current = result ? 3 : upload.isPending ? 2 : rows.length || parsing || issues.length ? 1 : 0;
+          return <li key={step} aria-current={current === index ? 'step' : undefined} className={`flex items-center gap-2 rounded-lg border px-3 py-3 ${current === index ? 'border-primary/30 bg-primary-soft font-semibold text-primary' : 'border-border bg-surface text-muted-foreground'}`}><span className="tabular">{index + 1}.</span>{step}</li>;
+        })}
+      </ol>
       {def.knittingFormat === 'planning' && <div className="mb-4 rounded-lg border border-border bg-surface p-4 text-sm">
         <p className="font-semibold">Unit-3 uses only the consolidated PO sheet</p>
         <p className="mt-1 text-muted-foreground">Update the same workbook and reimport it to refresh the status. The weekly machine grids, job card linking and separate completion sheets are not required.</p>
@@ -239,11 +247,12 @@ function ImportPage({ def }) {
       <Panel>
         <PanelHeader title="1. Select import data"/>
         <div className="flex flex-col gap-5 p-4">
-          {showUploadFile && <label htmlFor="file" className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border px-4 py-8 text-center transition-colors hover:border-primary hover:bg-primary-soft/40 sm:px-6">
+          {showUploadFile && <label htmlFor="file" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); const dropped = event.dataTransfer.files?.[0]; if (dropped && !parsing && !upload.isPending) void parseFile(dropped); }} className="focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border px-4 py-8 text-center transition-colors hover:border-primary hover:bg-primary-soft/40 sm:px-6">
               <FileUp className="size-8 text-primary" aria-hidden="true"/>
-              <span className="max-w-full break-all text-sm font-medium">{file ? file.name : 'Click to choose a file'}</span>
+              <span className="max-w-full break-all text-sm font-medium">{file ? file.name : 'Drop your ERP file here, or choose a file'}</span>
               <span className="text-xs text-muted-foreground">{def.accept?.replaceAll(',', ', ')}</span>
-              <input id="file" type="file" accept={def.accept} className="sr-only" onChange={(e) => {
+              {file && <span className="text-xs text-muted-foreground">{(file.size / 1024).toLocaleString('en-IN', { maximumFractionDigits: 1 })} KB{parsing ? ' · Reading and validating…' : ''}</span>}
+              <input id="file" type="file" disabled={parsing || upload.isPending} accept={def.accept} className="sr-only" onChange={(e) => {
                   const selected = e.target.files?.[0];
                   if (selected) void parseFile(selected);
                   e.target.value = '';
@@ -272,7 +281,7 @@ function ImportPage({ def }) {
       </div>}
       {(rows.length > 0 || parsing) && <DataTable rows={previewRows} columns={columns} isLoading={parsing} title="2. Review data" description={`${rows.length} valid row(s)${rows.length > 100 ? ' · previewing first 100' : ''}${columns.length === 12 ? ' · first 12 columns' : ''}`} searchable={false}/>}
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-        <Button size="lg" disabled={!canUpload || upload.isPending} loading={upload.isPending} onClick={() => upload.mutate()}><Upload aria-hidden="true"/>{`Upload ${rows.length} rows`}</Button>
+        <Button size="lg" className="w-full sm:w-auto" disabled={!canUpload || upload.isPending} loading={upload.isPending} onClick={() => upload.mutate()}><Upload aria-hidden="true"/>{`Upload ${rows.length} rows`}</Button>
         {progress && <p className="text-sm tabular text-muted-foreground" aria-live="polite">Batch {progress.done} of {progress.total}…</p>}
       </div>
       {result && <>

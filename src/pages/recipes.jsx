@@ -21,7 +21,7 @@ function RecipeCard({ r }) {
         </div>
         {pickString(r, 'STATUS') && <Badge tone={pickString(r, 'STATUS') === 'APPROVED' ? 'success' : 'warning'}>{pickString(r, 'STATUS')}</Badge>}
       </div>
-      <table className="w-full text-sm">
+      <table className="w-full table-fixed break-words text-sm">
         <caption className="sr-only">Dye composition</caption>
         <tbody>
           {dyes.map((d, i) => (<tr key={i} className="border-b border-border/60 last:border-0">
@@ -44,7 +44,7 @@ export default function RecipesPage() {
     const query = useQuery({ queryKey: ['recipes', search], queryFn: () => recipesService.searchRecipe(search), enabled: search.length > 0 });
     return (<>
       <PageHeader title="Recipes" description="Search shade recipes by party, quality, shade or dye name."/>
-      <form role="search" className="flex gap-2" onSubmit={(e) => {
+      <form role="search" className="flex flex-col gap-2 sm:flex-row" onSubmit={(e) => {
             e.preventDefault();
             setSearch(draft.trim());
         }}>

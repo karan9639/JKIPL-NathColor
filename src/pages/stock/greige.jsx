@@ -30,7 +30,7 @@ export default function GreigeStockPage() {
   const [unit,setUnit]=useState('u2');
   const query=useQuery({queryKey:['greige-stock',unit],queryFn:()=>unit==='u3'?greigeStockService.fetchAllU3():greigeStockService.fetchAllU2(),staleTime:30000,retry:1});
   const rows=query.data??[];
-  const values=rows.map(r=>unit==='u3'?toNumber(r.closing?.qtyKgs):toNumber(r.currentStock));
+  const values=rows.map(r=>unit==='u3'?r.closing?.qtyKgs:r.currentStock).filter(value=>value!=null && value!=='').map(toNumber);
   const total=values.reduce((a,b)=>a+b,0);
   const label=unit==='u3'?'Closing stock (KG)':'Total reported stock';
   return <div className="flex min-w-0 flex-col gap-4">
@@ -43,7 +43,7 @@ export default function GreigeStockPage() {
     </div>
     <DataTable key={unit} rows={rows} columns={unit==='u3'?u3Columns:u2Columns} isLoading={query.isPending} error={query.isError?errorMessage(query.error):null} onRetry={()=>query.refetch()} exportName={`greige-stock-${unit}`} emptyTitle="No stock data imported" emptyDescription="Upload the latest ERP stock report in ERP Imports, then refresh this page." toolbar={<>
       <label htmlFor="greige-unit" className="sr-only">Select stock unit</label>
-      <Select id="greige-unit" value={unit} onChange={e=>setUnit(e.target.value)} className="h-9 min-w-44">
+      <Select id="greige-unit" value={unit} onChange={e=>setUnit(e.target.value)} className="h-9 w-full sm:w-44">
         <option value="u2">Unit-2 Greige</option><option value="u3">U-3 (ERP U-1)</option>
       </Select>
     </>}/>

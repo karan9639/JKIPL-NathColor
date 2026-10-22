@@ -52,7 +52,7 @@ export default function QrPage() {
                 </div>)}/>
           <div className="flex min-h-72 flex-col items-center justify-center gap-3 p-6">
             {image ? (<>
-                <img src={image.url} alt={`QR code for ${image.value}`} className="size-56 [image-rendering:pixelated]"/>
+                <img src={image.url} alt={`QR code for ${image.value}`} className="aspect-square w-56 max-w-full object-contain [image-rendering:pixelated]"/>
                 <p className="tabular text-lg font-semibold">{image.value}</p>
               </>) : (<p className="text-sm text-muted-foreground">Your QR code will appear here.</p>)}
           </div>

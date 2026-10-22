@@ -56,10 +56,10 @@ export default function DyeingProgramsPage() {
       <PageHeader title="Dyeing Programs" description="View uploaded dyeing schedules, search customer and orders, or filter by schedule date." />
       <ImportReportFilters kind="dyeing" loading={query.isFetching} onApply={setParams} onRefresh={() => query.refetch()}/>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Total matching schedules" value={formatNumber(pagination?.totalEntries ?? 0, 0)}/>
+        {query.isPending || query.isError ? ['Matching schedules', 'Records on page', 'Quantity (KG)', 'Balance (KG)'].map(label => <Stat key={label} label={label} value="—" />) : <><Stat label="Total matching schedules" value={formatNumber(pagination?.totalEntries ?? 0, 0)}/>
         <Stat label="Records on page" value={formatNumber(rows.length, 0)}/>
         <Stat label="Quantity on page (kg)" value={formatNumber(totalKgs)} tone="primary"/>
-        <Stat label="Balance on page (kg)" value={formatNumber(balanceKgs)} tone="accent"/>
+        <Stat label="Balance on page (kg)" value={formatNumber(balanceKgs)} tone="accent"/></>}
       </div>
       <DataTable
         rows={rows}

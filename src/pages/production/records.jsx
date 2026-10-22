@@ -23,7 +23,7 @@ export default function RecordsPage() {
     return (<>
       <PageHeader title="Daily Records" description="Number of entries recorded per production stage each day."/>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
-        {KEYS.map(([key, label]) => (<Stat key={key} label={`${label} (period)`} value={rows.reduce((s, r) => s + toNumber(r[key]), 0).toLocaleString('en-IN')}/>))}
+        {KEYS.map(([key, label]) => (<Stat key={key} label={`${label} (period)`} value={query.isLoading || query.isError ? '—' : rows.reduce((s, r) => s + toNumber(r[key]), 0).toLocaleString('en-IN')}/>))}
       </div>
       <DataTable rows={rows} columns={columns} isLoading={query.isLoading} error={query.error ? errorMessage(query.error) : null} onRetry={() => query.refetch()} exportName="daily-records" searchable={false}/>
     </>);

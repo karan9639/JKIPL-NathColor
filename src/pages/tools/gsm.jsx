@@ -28,7 +28,7 @@ export default function GsmPage() {
     }
     return (<>
       <PageHeader title="GSM Calculator" description="Convert between kilograms, metres and GSM for a given fabric width."/>
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid w-full max-w-5xl gap-5 lg:grid-cols-2">
         <Panel>
           <PanelHeader title="Inputs"/>
           <div className="grid gap-4 p-4 sm:grid-cols-2">
@@ -59,7 +59,7 @@ export default function GsmPage() {
         <Panel className="flex flex-col justify-center bg-primary-soft">
           <div className="p-6 text-center" aria-live="polite">
             <p className="text-sm font-medium text-muted-foreground">Result</p>
-            <p className="tabular mt-2 text-5xl font-semibold text-primary">{formatNumber(result)}</p>
+            <p className="tabular mt-2 break-all text-3xl font-semibold sm:text-5xl text-primary">{formatNumber(result)}</p>
             <p className="mt-1 text-lg">{label}</p>
             {mode !== 'gsm' && <p className="tabular mt-4 text-xs text-muted-foreground">{formatNumber(gramsPerMetre)} g per running metre</p>}
           </div>

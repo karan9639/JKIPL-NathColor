@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { Dialog } from '@/components/ui/dialog';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { RefreshCw } from 'lucide-react';
@@ -7,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { PageHeader, Panel } from '@/components/ui/panel';
 export default function RefreshCachePage() {
     const qc = useQueryClient();
+    const [confirmOpen, setConfirmOpen] = useState(false);
     const flush = useMutation({
         mutationFn: toolsService.flushCache,
         onSuccess: (res) => {
@@ -22,12 +25,13 @@ export default function RefreshCachePage() {
           <p className="text-sm text-pretty text-muted-foreground">
             Use this after an import if a report still shows old figures. This clears your browser query cache. It does not change any ERP or MongoDB records.
           </p>
-          <Button size="lg" loading={flush.isPending} onClick={() => flush.mutate()}>
+          <Button size="lg" loading={flush.isPending} onClick={() => setConfirmOpen(true)}>
             <RefreshCw aria-hidden="true"/>
             Refresh now
           </Button>
           {flush.isSuccess && <p className="text-sm text-success" role="status">Data refreshed at {new Date().toLocaleTimeString('en-GB')}.</p>}
         </div>
       </Panel>
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen} title="Refresh cached data?" description="Reports will request their latest available data. ERP records will not be changed." footer={<><Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancel</Button><Button loading={flush.isPending} onClick={() => { setConfirmOpen(false); flush.mutate(); }}>Refresh data</Button></>}><p className="text-sm text-muted-foreground">Use this after an import if reports still show earlier figures.</p></Dialog>
     </>);
 }

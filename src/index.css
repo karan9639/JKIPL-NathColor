@@ -16,6 +16,9 @@
   --color-primary-foreground: #ffffff;
   --color-primary-soft: #e3efe6;
 
+  --color-brand: #e11d2a;
+  --color-brand-soft: #fde8ea;
+
   --color-accent: #b45309;
   --color-accent-soft: #fdf1e2;
 
@@ -48,7 +51,16 @@
 
 @layer base {
   #root { min-height: 100dvh; }
-  main, section, form { min-width: 0; }
+  main, section, form, fieldset { min-width: 0; }
+  body { margin: 0; }
+  input, select, textarea { min-width: 0; max-width: 100%; }
+  input[type='date'], input[type='datetime-local'] { appearance: none; }
+  h1, h2, h3, p, dd { overflow-wrap: anywhere; }
+  ::selection { background: var(--color-primary-soft); color: var(--color-primary); }
+  * { scrollbar-width: thin; scrollbar-color: var(--color-border) transparent; }
+  @media (pointer: coarse) {
+    button, select, input:not([type='checkbox']):not([type='radio']) { min-height: 44px; }
+  }
   img, video { max-width: 100%; height: auto; }
   button, a, input, select, textarea { touch-action: manipulation; }
 }

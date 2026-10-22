@@ -107,14 +107,14 @@ export default function OrdersPage({ menuKey }) {
       </form>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {isOrderBook ? <>
+        {query.isLoading || query.isError ? ['Order lines', 'Ordered MTR', 'Ordered KG', 'Other UOM lines'].map(label => <Stat key={label} label={label} value="—" />) : isOrderBook ? <>
           <Stat label="Order lines on this page" value={rows.length.toLocaleString('en-IN')} tone="primary"/>
           <Stat label="Ordered MTR (page)" value={formatNumber((quantitiesByUnit.MTR||0)+(quantitiesByUnit.METERS||0),2)}/>
           <Stat label="Ordered KG (page)" value={formatNumber((quantitiesByUnit.KG||0)+(quantitiesByUnit.KGS||0),2)}/>
           <Stat label="Other UOM lines" value={rows.filter(r=>!['MTR','METERS','KG','KGS'].includes(String(r.uom||'').toUpperCase())).length}/>
         </> : <>
-          <Stat label="Total pending KG" value={formatNumber(first?.totalPending ?? 0,0)} tone="primary"/>
-          <Stat label="Total pending M" value={formatNumber(first?.totalMtr ?? 0,0)}/>
+          <Stat label="Total pending KG" value={formatNumber(first?.totalPending,0)} tone="primary"/>
+          <Stat label="Total pending M" value={formatNumber(first?.totalMtr,0)}/>
           <Stat label="Orders loaded" value={rows.length.toLocaleString('en-IN')}/>
           <Stat label="Loaded balance KG" value={formatNumber(loadedBalance,0)}/>
         </>}

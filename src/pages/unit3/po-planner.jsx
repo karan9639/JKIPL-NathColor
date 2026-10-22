@@ -1,5 +1,8 @@
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from 'react-router';
+import { useAuth } from '@/hooks/useAuth';
+import { findNavItem } from '@/constants/navigation';
 import { CalendarDays, RotateCcw, Search, X } from "lucide-react";
 
 import { productionService } from "@/services/production.service";
@@ -29,10 +32,10 @@ const STATUS_LABELS = {
 };
 
 const STATUS_STYLES = {
-  CLOSED: "bg-green-100 text-green-800",
-  OPEN: "bg-slate-100 text-slate-700",
-  HOLD: "bg-amber-100 text-amber-800",
-  REVIEW: "bg-orange-100 text-orange-800",
+  CLOSED: "bg-success-soft text-success",
+  OPEN: "bg-muted text-muted-foreground",
+  HOLD: "bg-accent-soft text-accent",
+  REVIEW: "bg-danger-soft text-danger",
 };
 
 const INITIAL_FILTERS = {
@@ -124,6 +127,7 @@ const PO_COLUMNS = [
   {
     key: "PLANNING_REMARKS",
     label: "ERP Remarks",
+    className: "min-w-64 max-w-96 whitespace-normal break-words",
     render: (row) => pickString(row, "PLANNING_REMARKS") || "—",
   },
 ];
@@ -189,6 +193,8 @@ function calculateStats(lines) {
 
 export default function Unit3POPlannerPage() {
   const [filters, setFilters] = useState(INITIAL_FILTERS);
+  const { can } = useAuth();
+  const importItem = findNavItem('/imports/knitting-po-planning');
 
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["knitting-po-lines"],
@@ -196,11 +202,12 @@ export default function Unit3POPlannerPage() {
     retry: false,
   });
 
-  const allLines = Array.isArray(data) ? data : [];
+  const allLines = useMemo(() => Array.isArray(data) ? data : [], [data]);
+  const deferredFilters = useDeferredValue(filters);
 
   const filteredLines = useMemo(
-    () => filterPOLines(allLines, filters),
-    [allLines, filters],
+    () => filterPOLines(allLines, deferredFilters),
+    [allLines, deferredFilters],
   );
 
   const stats = useMemo(() => calculateStats(filteredLines), [filteredLines]);
@@ -225,7 +232,7 @@ export default function Unit3POPlannerPage() {
 
   return (
     <div className="min-w-0 w-full space-y-5 pb-6">
-      <PageHeader title="Unit-3 PO Planner" />
+      <PageHeader title="Unit-3 PO Planner" description="Read-only planning status from imported ERP PO remarks. Not a production completion record." actions={importItem && can(importItem) && <Link to={importItem.path} className="inline-flex min-h-10 items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary-hover">Import / Update PO sheet</Link>} />
 
       {/* Filters */}
       <Panel className="p-4 sm:p-5">
@@ -322,7 +329,7 @@ export default function Unit3POPlannerPage() {
             <span>
               Required:{" "}
               <strong className="text-foreground">
-                {formatNumber(stats.requiredKgs)} KG
+                {isLoading || error ? '—' : formatNumber(stats.requiredKgs)} KG
               </strong>{" "}
               (KG lines only)
             </span>
@@ -341,17 +348,17 @@ export default function Unit3POPlannerPage() {
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Stat
           label="Closed in ERP Planner"
-          value={stats.CLOSED.toLocaleString("en-IN")}
+          value={isLoading || error ? '—' : stats.CLOSED.toLocaleString("en-IN")}
           tone="primary"
         />
 
-        <Stat label="Open" value={stats.OPEN.toLocaleString("en-IN")} />
+        <Stat label="Open" value={isLoading || error ? '—' : stats.OPEN.toLocaleString("en-IN")} />
 
-        <Stat label="On Hold" value={stats.HOLD.toLocaleString("en-IN")} />
+        <Stat label="On Hold" value={isLoading || error ? '—' : stats.HOLD.toLocaleString("en-IN")} />
 
         <Stat
           label="Review Remarks"
-          value={stats.REVIEW.toLocaleString("en-IN")}
+          value={isLoading || error ? '—' : stats.REVIEW.toLocaleString("en-IN")}
         />
       </div>
 

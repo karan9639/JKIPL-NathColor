@@ -36,7 +36,12 @@ export default function YarnStockPage() {
     });
     const rows = query.data?.rows ?? [];
     const pagination = query.data?.pagination;
-    const closing = rows.reduce((sum, row) => sum + toNumber(row.closing?.qty), 0);
+    const closing = rows.reduce((totals, row) => {
+        const unit = String(row.uom || 'Unspecified').trim().toUpperCase();
+        if (row.closing?.qty != null && row.closing.qty !== '') totals[unit] = (totals[unit] ?? 0) + toNumber(row.closing.qty);
+        return totals;
+    }, {});
+    const unavailable = query.isPending || query.isError;
     const stockValue = rows.reduce((sum, row) => sum + toNumber(row.closing?.value), 0);
     const updatePage = (page) => setParams((previous) => ({ ...previous, page }));
 
@@ -44,10 +49,10 @@ export default function YarnStockPage() {
       <PageHeader title="Yarn Stock" description="Item-wise opening, receipts, issues and closing stock from the uploaded Yarn Stock report."/>
       <ImportReportFilters kind="yarn" loading={query.isFetching} onApply={setParams} onRefresh={() => query.refetch()}/>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Total matching items" value={formatNumber(pagination?.totalEntries ?? 0, 0)}/>
-        <Stat label="Items on page" value={formatNumber(rows.length, 0)}/>
-        <Stat label="Page closing quantity" value={formatNumber(closing)} tone="primary"/>
-        <Stat label="Page closing value" value={formatNumber(stockValue)} />
+        <Stat label="Total matching items" value={unavailable ? '—' : formatNumber(pagination?.totalEntries, 0)}/>
+        <Stat label="Items on page" value={unavailable ? '—' : formatNumber(rows.length, 0)}/>
+        <Stat label="Page closing quantity" value={unavailable ? '—' : Object.entries(closing).map(([unit, value]) => `${formatNumber(value)} ${unit}`).join(' · ') || '—'} tone="primary" hint="Reported quantities, grouped by UOM"/>
+        <Stat label="Page closing value" value={unavailable ? '—' : formatNumber(stockValue)} />
       </div>
       <DataTable
         rows={rows}
