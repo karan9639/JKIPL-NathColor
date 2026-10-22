@@ -1,273 +1,149 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
-import { CalendarDays, ClipboardPenLine, FileUp, Link2, RotateCcw } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { RefreshCw, Clock3 } from 'lucide-react';
 import { productionService } from '@/services/production.service';
 import { errorMessage } from '@/services/http/client';
-import { config } from '@/config/env';
-import { linkedCards, knittingStatus, plannedKgs, poDateValue, poLineId, poNumber, producedKgs } from '@/utils/knitting';
-import { formatDate, formatNumber, parseLooseDate, pickString, todayISO } from '@/utils/format';
-import { toIsoDate } from '@/utils/spreadsheet';
+import { formatNumber, pickString } from '@/utils/format';
+import {
+  PRODUCTION_STAGES, formatErpOpening,
+  formatTimelineRow, getTimelineEvents, openingSortKey,
+} from '@/utils/lot-timeline';
 import { DataTable } from '@/components/ui/data-table';
+import { Badge, PageHeader, Panel, Stat } from '@/components/ui/panel';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Field, Input, Select, Textarea } from '@/components/ui/field';
-import { PageHeader, Panel } from '@/components/ui/panel';
-function opened(row) {
-    return parseLooseDate(`${pickString(row, 'JOBCARDDATE')} ${pickString(row, 'JOBCARDTIME')}`.trim());
-}
-function elapsed(row, key) {
-    const start = opened(row);
-    const end = parseLooseDate(row[key]);
-    if (!start || !end)
-        return null;
-    const hours = (end.getTime() - start.getTime()) / 36e5;
-    return hours < 0 ? null : hours;
-}
-function stamp(key, label) {
-    return {
-        key, label,
-        sortValue: (row) => parseLooseDate(row[key])?.getTime() ?? 0,
-        render: (row) => {
-            if (!pickString(row, key))
-                return <span className="text-muted-foreground">—</span>;
-            const h = elapsed(row, key);
-            return <span className="flex flex-col leading-tight">
-        <span>{formatDate(row[key], true)}</span>
-        {h !== null && <span className="tabular text-xs text-muted-foreground">+{h < 48 ? `${h.toFixed(1)}h` : `${(h / 24).toFixed(1)}d`}</span>}
-      </span>;
-        },
-    };
-}
-const jobColumns = [
-    { key: 'PO_NUMBER', label: 'PO number', render: (row) => pickString(row, 'PO_NUMBER') || <span className="text-muted-foreground">Not linked</span> },
-    { key: 'PO_DATE', label: 'PO date', render: (row) => pickString(row, 'PO_DATE') ? formatDate(row.PO_DATE) : '—' },
-    { key: 'JOBCARDNO', label: 'Job card', render: (row) => <span className="tabular font-medium text-primary">{pickString(row, 'JOBCARDNO')}</span> },
-    { key: 'MANUALLOTNO', label: 'Lot' },
-    { key: 'JETNO', label: 'Jet', align: 'right' },
-    { key: 'JOBCARDDATE', label: 'Opened', render: (row) => formatDate(`${pickString(row, 'JOBCARDDATE')} ${pickString(row, 'JOBCARDTIME')}`, true) },
-    {
-        key: 'KNITTING_COMPLETED_AT', label: 'Knitting',
-        sortValue: (row) => parseLooseDate(row.KNITTING_COMPLETED_AT)?.getTime() ?? 0,
-        render: (row) => {
-            const completed = pickString(row, 'KNITTING_COMPLETED_AT');
-            const status = pickString(row, 'KNITTING_STATUS');
-            if (!completed)
-                return status ? <span className="text-xs text-muted-foreground">{status.replaceAll('_', ' ')}</span> : '—';
-            // Knitting predates the dyeing job card; never subtract its timestamp from the job-card opening.
-            return <span className="flex flex-col leading-tight"><span>{formatDate(completed, true)}</span><span className="text-xs text-muted-foreground">Completed</span></span>;
-        },
-    },
-    stamp('RECIPEDATE', 'Recipe'),
-    stamp('DYESCHEMISSUEDATE', 'Dyes issue'),
-    stamp('JETLOADINGDATE', 'Jet loading'),
-    stamp('HEATSETTINGDATE', 'Heat set'),
-    stamp('FINISHINGDATE', 'Finishing'),
-    stamp('JOBCARDCLOSEDDATE', 'Closed'),
-    stamp('INVOICE_DATE', 'Invoiced'),
+
+const statusTone = { Closed: 'success', 'In production': 'primary', Open: 'neutral' };
+
+const columns = [
+  { key: 'ORDERID', label: 'ERP Order ID', render: (r) => <span className="font-semibold tabular">{r.ORDERID || '—'}</span> },
+  { key: 'JOBCARDNO', label: 'Job Card', render: (r) => <span className="font-medium text-primary tabular">{r.JOBCARDNO || '—'}</span> },
+  { key: 'MANUALLOTNO', label: 'Manual Lot No.' },
+  { key: 'ITEMNAME', label: 'Item / Fabric', className: 'max-w-64 truncate' },
+  { key: 'KGS', label: 'Allocated KG', align: 'right', render: (r) => r.KGS == null ? '—' : formatNumber(r.KGS, 3) },
+  { key: 'OPENED_DISPLAY', label: 'Opened (ERP)', sortValue: openingSortKey,
+    render: (r) => {const [date, time] = r.OPENED_DISPLAY.split(' · '); return <span className="flex flex-col whitespace-nowrap tabular"><span>{date}</span>{time && <span className="text-xs text-muted-foreground">{time}</span>}</span>;} },
+  { key: 'RECORDED_STAGES', label: 'Stage records', render: (r) => {
+      const recorded = new Set(getTimelineEvents(r).map(e => e.key));
+      return <div className="flex gap-1" aria-label="Recorded dyeing stages">
+        {PRODUCTION_STAGES.map((stage, i) => <span key={stage.key} title={`${stage.short}: ${recorded.has(stage.key) ? 'recorded' : 'no record'}`}
+          className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${recorded.has(stage.key) ? 'border-primary/30 bg-primary-soft text-primary' : 'border-border text-muted-foreground'}`}>
+          {['Dy','Jet','Rop','HS','Fin'][i]}
+        </span>)}
+      </div>;} },
+  { key: 'LATEST_STAGE', label: 'Last recorded activity', render: (r) => <span className="flex flex-col gap-0.5">
+      <span className="font-medium">{r.LATEST_STAGE}</span>
+      {r.LATEST_STAGE_DATE && <span className="text-xs text-muted-foreground tabular">{r.LATEST_STAGE_DATE}</span>}
+    </span> },
+  { key: 'STAGE_STATUS', label: 'Status', render: (r) => <Badge tone={statusTone[r.STAGE_STATUS]}>{r.STAGE_STATUS}</Badge> },
 ];
-const poColumns = [
-    { key: 'PO_NUMBER', label: 'PO number', render: (r) => <span className="font-semibold text-primary">{poNumber(r)}</span> },
-    { key: 'PO_DATE', label: 'PO date', render: (r) => formatDate(poDateValue(r, 'PO_DATE')) },
-    { key: 'FABRIC_NAME', label: 'Fabric' },
-    { key: 'PLANNED_KGS', label: 'Planned KG', align: 'right', render: (r) => pickString(r, 'PLANNED_KGS', 'planned_kgs') ? formatNumber(plannedKgs(r)) : '—' },
-    { key: 'PRODUCED_KGS', label: 'Produced KG', align: 'right', render: (r) => formatNumber(producedKgs(r)) },
-    { key: 'PLANNED_MACHINE', label: 'Machine' },
-    { key: 'EXPECTED_DELIVERY_DATE', label: 'EDD', render: (r) => formatDate(poDateValue(r, 'EXPECTED_DELIVERY_DATE')) },
-    { key: 'KNITTING_STATUS', label: 'Knitting status', render: (r) => <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium">{knittingStatus(r).replaceAll('_', ' ')}</span> },
-    { key: 'KNITTING_COMPLETED_AT', label: 'Knitting completed', render: (r) => pickString(r, 'KNITTING_COMPLETED_AT') ? formatDate(r.KNITTING_COMPLETED_AT, true) : '—' },
-    { key: 'JOB_CARDS', label: 'Linked cards', render: (r) => linkedCards(r).join(', ') || <span className="text-muted-foreground">Not linked</span> },
-];
-function knitMatch(row, cards) {
-    const no = pickString(row, 'JOBCARDNO');
-    const order = pickString(row, 'ORDERID');
-    const lineId = pickString(row, 'PO_LINE_ID');
-    // A card number alone can repeat across different ERP orders. Only verified
-    // line IDs or an explicit OrderID + JobCardNo link can enrich a row.
-    return cards.filter((line) => {
-        if (lineId && lineId === poLineId(line))
-            return true;
-        const links = line.LINKED_JOB_CARDS ?? line.linked_job_cards;
-        return !!order && !!no && Array.isArray(links) && links.some((link) => {
-            if (!link || typeof link !== 'object')
-                return false;
-            const candidate = link;
-            return pickString(candidate, 'JOBCARDNO', 'jobcardno') === no && pickString(candidate, 'ORDERID', 'order_id') === order;
-        });
-    });
-}
-function mergeTrackerRows(rows, poLines) {
-    return rows.map((row) => {
-        const matches = knitMatch(row, poLines);
-        const uniquePOs = [...new Set(matches.map(poNumber).filter(Boolean))];
-        const single = matches.length === 1 ? matches[0] : undefined;
-        return {
-            ...row,
-            PO_NUMBER: pickString(row, 'PO_NUMBER') || uniquePOs.join(', '),
-            PO_DATE: pickString(row, 'PO_DATE') || (single && poDateValue(single, 'PO_DATE')) || '',
-            KNITTING_STATUS: pickString(row, 'KNITTING_STATUS') || (single && knittingStatus(single)) || '',
-            KNITTING_COMPLETED_AT: pickString(row, 'KNITTING_COMPLETED_AT') || (single && pickString(single, 'KNITTING_COMPLETED_AT')) || '',
-        };
-    });
-}
-function EditKnittingDialog({ line, onClose, onShowCards }) {
-    const queryClient = useQueryClient();
-    const [mode, setMode] = useState('production');
-    const [eventId] = useState(() => crypto.randomUUID());
-    const [date, setDate] = useState(todayISO());
-    const [machine, setMachine] = useState('');
-    const [qty, setQty] = useState('');
-    const [status, setStatus] = useState('PARTIAL');
-    const [completed, setCompleted] = useState('');
-    const [greigeLot, setGreigeLot] = useState('');
-    const [remarks, setRemarks] = useState('');
-    const [jobCard, setJobCard] = useState('');
-    const [orderId, setOrderId] = useState('');
-    const [lot, setLot] = useState('');
-    const save = useMutation({
-        mutationFn: productionService.createKnittingEntry,
-        onSuccess: async () => {
-            await Promise.all([queryClient.invalidateQueries({ queryKey: ['knitting-po-lines'] }), queryClient.invalidateQueries({ queryKey: ['tracker'] })]);
-            toast.success('Knitting production updated');
-            onClose();
-        },
-        onError: (e) => toast.error(errorMessage(e)),
-    });
-    const link = useMutation({
-        mutationFn: productionService.linkKnittingJobCard,
-        onSuccess: async () => {
-            await Promise.all([queryClient.invalidateQueries({ queryKey: ['knitting-po-lines'] }), queryClient.invalidateQueries({ queryKey: ['tracker'] })]);
-            toast.success('Job card linked to PO line');
-            onClose();
-        },
-        onError: (e) => toast.error(errorMessage(e)),
-    });
-    if (!line)
-        return null;
-    const id = poLineId(line);
-    const saveEntry = () => {
-        const amount = Number(qty);
-        if (!id || !date || !machine.trim() || qty.trim() === '' || !Number.isFinite(amount) || amount < 0 || (['PARTIAL', 'COMPLETED'].includes(status) && amount <= 0)) {
-            toast.error('Enter a PO line ID, date, machine and valid incremental production quantity.');
-            return;
-        }
-        if (status === 'COMPLETED' && !completed) {
-            toast.error('Enter the actual completion date and time.');
-            return;
-        }
-        save.mutate({
-            po_line_id: id,
-            production_event_id: eventId, // stable across network retries; server enforces idempotency
-            production_date: date,
-            machine_no: machine.trim(), produced_kgs: amount, status,
-            completed_at: status === 'COMPLETED' ? completed : null,
-            greige_lot_no: greigeLot.trim(), remarks: remarks.trim(),
-        });
-    };
-    const saveLink = () => {
-        if (!id || !jobCard.trim() || !orderId.trim()) {
-            toast.error('PO line ID, OrderID and Job Card number are required for a verified link.');
-            return;
-        }
-        const payload = { po_line_id: id, order_id: orderId.trim(), jobcardno: jobCard.trim(), manual_lot_no: lot.trim() };
-        link.mutate(payload);
-    };
-    return <Dialog open={!!line} onOpenChange={(open) => { if (!open && !save.isPending && !link.isPending)
-        onClose(); }} title={`${poNumber(line)} · ${id}`} description={pickString(line, 'FABRIC_NAME')} className="max-w-2xl" footer={<>
-      <Button variant="outline" onClick={onShowCards}>Show linked job cards</Button><Button variant="outline" onClick={onClose}>Cancel</Button>
-      {mode === 'production' ? <Button loading={save.isPending} onClick={saveEntry}>Save production entry</Button> : <Button loading={link.isPending} onClick={saveLink}>Link job card</Button>}
-    </>}>
-    <div className="space-y-4">
-      <div className="flex gap-2 border-b border-border pb-3">
-        <Button variant={mode === 'production' ? 'secondary' : 'ghost'} size="sm" onClick={() => setMode('production')}><ClipboardPenLine /> Production update</Button>
-        <Button variant={mode === 'link' ? 'secondary' : 'ghost'} size="sm" onClick={() => setMode('link')}><Link2 /> Job card linking</Button>
-      </div>
-      <p className="text-xs text-muted-foreground">Planned: {formatNumber(plannedKgs(line))} KG · Previously produced: {formatNumber(producedKgs(line))} KG · Existing status: {knittingStatus(line).replaceAll('_', ' ')}</p>
-      {mode === 'production' ? <>
-        <p className="text-xs text-muted-foreground">Enter only the additional KG manufactured in this event. Do not re-enter previous totals.</p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Production date" htmlFor="knit-date"><Input id="knit-date" type="date" value={date} onChange={(e) => setDate(e.target.value)}/></Field>
-          <Field label="Actual machine" htmlFor="knit-machine"><Input id="knit-machine" value={machine} onChange={(e) => setMachine(e.target.value)} placeholder={pickString(line, 'PLANNED_MACHINE') || 'Machine number'}/></Field>
-          <Field label="Additional produced KG" htmlFor="knit-kg"><Input id="knit-kg" type="number" min="0" step="0.001" value={qty} onChange={(e) => setQty(e.target.value)}/></Field>
-          <Field label="Production status" htmlFor="knit-status"><Select id="knit-status" value={status} onChange={(e) => setStatus(e.target.value)}><option value="IN_PROGRESS">In progress</option><option value="PARTIAL">Partial</option><option value="COMPLETED">Completed</option><option value="ON_HOLD">On hold</option></Select></Field>
-          {status === 'COMPLETED' && <Field label="Actual completion date and time" htmlFor="knit-finished"><Input id="knit-finished" type="datetime-local" value={completed} onChange={(e) => setCompleted(e.target.value)}/></Field>}
-          <Field label="Greige lot (optional)" htmlFor="knit-greige"><Input id="knit-greige" value={greigeLot} onChange={(e) => setGreigeLot(e.target.value)}/></Field>
-        </div>
-        <Field label="Remarks (optional)" htmlFor="knit-remarks"><Textarea id="knit-remarks" rows={2} value={remarks} onChange={(e) => setRemarks(e.target.value)}/></Field>
-      </> : <>
-        <p className="text-xs text-muted-foreground">Enter the verified ERP OrderID and Job Card number. Fabric names alone are never used to link records.</p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="ERP OrderID" htmlFor="knit-order"><Input id="knit-order" value={orderId} onChange={(e) => setOrderId(e.target.value)}/></Field>
-          <Field label="Job Card number" htmlFor="knit-card"><Input id="knit-card" value={jobCard} onChange={(e) => setJobCard(e.target.value)}/></Field>
-          <Field label="Manual/greige lot (optional)" htmlFor="knit-lot"><Input id="knit-lot" value={lot} onChange={(e) => setLot(e.target.value)}/></Field>
-        </div>
-        <div className="text-xs text-muted-foreground">Current linked cards: {linkedCards(line).join(', ') || 'None'}</div>
-      </>}
+
+function Detail({ row }) {
+  const events = getTimelineEvents(row);
+  const missing = PRODUCTION_STAGES.filter(stage => !events.some(e => e.key === stage.key));
+  const details = [
+    ['ERP Order ID', row.ORDERID],
+    ['Manual Lot No.', row.MANUALLOTNO],
+    ['Item / Fabric', row.ITEMNAME || row.FABRICNAME],
+    ['Customer', row.CUSTOMERNAME],
+    ['Colour', row.COLOR],
+    ['Allocated KG', row.KGS == null ? '—' : formatNumber(row.KGS, 3)],
+    ['ERP job card status', row.STATUS],
+    ['Jet (ERP / production)', row.JETLOADING_MACHINE || row.JETNO],
+  ];
+  return <div className="space-y-5">
+    <div className="grid grid-cols-2 gap-x-5 gap-y-3 rounded-lg bg-muted/50 p-3">
+      {details.map(([label, value]) => <div key={label} className="min-w-0">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="break-words text-sm font-medium">{value || '—'}</p>
+      </div>)}
     </div>
-  </Dialog>;
+
+    <div className="space-y-3">
+      <h3 className="text-sm font-semibold">Recorded timeline</h3>
+      <div className="relative ml-2 border-l-2 border-border pl-5">
+        <div className="relative pb-5">
+          <span className="absolute -left-[27px] top-1.5 size-3 rounded-full border-2 border-primary bg-surface" />
+          <p className="font-medium text-sm">Job card opened (ERP)</p>
+          <p className="text-xs text-muted-foreground tabular">{formatErpOpening(row)}</p>
+        </div>
+        {events.map((event) => <div key={event.key} className="relative pb-5 last:pb-0">
+          <span className="absolute -left-[27px] top-1.5 size-3 rounded-full border-2 border-primary bg-primary-soft" />
+          <p className="text-sm font-medium">{event.label}</p>
+          <p className="text-xs text-muted-foreground tabular">{event.display}</p>
+        </div>)}
+      </div>
+      {!events.length && <p className="rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
+        No production-stage, closing or invoice event is recorded for this job card yet.
+      </p>}
+    </div>
+    {missing.length > 0 && <div className="border-t border-border pt-3">
+      <p className="mb-2 text-xs font-medium text-muted-foreground">No record imported/entered for</p>
+      <div className="flex flex-wrap gap-1.5">
+        {missing.map(e => <span key={e.key} className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground">{e.short}</span>)}
+      </div>
+    </div>}
+    <p className="border-t border-border pt-3 text-xs leading-relaxed text-muted-foreground">
+      These are recorded job-card events, not guaranteed sequential process steps. A job card may cover multiple ERP order lines; shared job-card events can appear on each linked order line. Missing activity is not proof a machine step was skipped.
+    </p>
+  </div>;
 }
+
 export default function TrackerPage() {
-    const tracker = useQuery({ queryKey: ['tracker'], queryFn: productionService.tracker });
-    const pos = useQuery({ queryKey: ['knitting-po-lines'], queryFn: productionService.knittingPOLines, retry: false });
-    const [basis, setBasis] = useState('PO_DATE');
-    const [from, setFrom] = useState('');
-    const [to, setTo] = useState('');
-    const [searchPo, setSearchPo] = useState('');
-    const [selectedPO, setSelectedPO] = useState('');
-    const [line, setLine] = useState(null);
-    const allLines = pos.data ?? [];
-    const filteredPO = useMemo(() => allLines.filter((r) => {
-        const date = toIsoDate(poDateValue(r, basis));
-        if ((from || to) && (!date || (from && date < from) || (to && date > to)))
-            return false;
-        return !searchPo.trim() || poNumber(r).toUpperCase().includes(searchPo.trim().toUpperCase()) || pickString(r, 'FABRIC_NAME').toUpperCase().includes(searchPo.trim().toUpperCase());
-    }), [allLines, from, to, basis, searchPo]);
-    const jobRows = useMemo(() => {
-        const enriched = mergeTrackerRows(tracker.data ?? [], allLines);
-        return !selectedPO ? enriched : enriched.filter((r) => pickString(r, 'PO_NUMBER').split(',').map((p) => p.trim()).includes(selectedPO));
-    }, [tracker.data, allLines, selectedPO]);
-    const totalPlanned = filteredPO.reduce((sum, r) => sum + plannedKgs(r), 0);
-    const totalProduced = filteredPO.reduce((sum, r) => sum + producedKgs(r), 0);
-    return <>
-    <PageHeader title="Order Tracker" description="PO-wise knitting and job-card timestamps, from planning through finishing."/>
-    <Panel className="mb-4 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold">Date-wise Knitting PO tracker</h2>
-          <p className="mt-1 text-xs text-muted-foreground">Select a PO line to update Knitting, or connect it to an ERP job card. Date filters apply to this PO table.</p>
+  const query = useQuery({queryKey: ['tracker'], queryFn: productionService.tracker, retry: 1, staleTime: 30000});
+  const [selected, setSelected] = useState(null);
+  const [status, setStatus] = useState('All');
+  const all = useMemo(() => (query.data ?? []).map(formatTimelineRow), [query.data]);
+  const rows = status === 'All' ? all : all.filter(row => row.STAGE_STATUS === status);
+  const counts = useMemo(() => ({
+    All: all.length,
+    Open: all.filter(r => r.STAGE_STATUS === 'Open').length,
+    'In production': all.filter(r => r.STAGE_STATUS === 'In production').length,
+    Closed: all.filter(r => r.STAGE_STATUS === 'Closed').length,
+    distinctCards: new Set(all.map(r => r.JOBCARDNO).filter(Boolean)).size,
+  }), [all]);
+
+  return <div className="flex min-w-0 flex-col gap-4">
+    <PageHeader title="Dyeing Lot Timeline" description="ERP Order → Job Card → Manual Lot → recorded dyeing events. Select a row to view the full timeline." actions={
+      <Button variant="outline" size="sm" loading={query.isFetching} onClick={() => query.refetch()}>
+        <RefreshCw aria-hidden="true"/> Refresh
+      </Button>
+    }/>
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <Stat label="ERP order lines" value={query.isError || query.isPending ? '—' : formatNumber(counts.All, 0)} hint={`${counts.distinctCards} distinct job cards`} tone="primary"/>
+      <Stat label="Open (no stage recorded)" value={query.isError || query.isPending ? '—' : formatNumber(counts.Open, 0)}/>
+      <Stat label="In production" value={query.isError || query.isPending ? '—' : formatNumber(counts['In production'], 0)}/>
+      <Stat label="Closed in ERP records" value={query.isError || query.isPending ? '—' : formatNumber(counts.Closed, 0)}/>
+    </div>
+    <Panel className="p-3 sm:p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Filter lot status">
+          {['All','Open','In production','Closed'].map(s => <button type="button" key={s}
+            aria-pressed={status === s} onClick={() => setStatus(s)}
+            className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${status===s ? 'border-primary bg-primary-soft text-primary' : 'border-border bg-surface text-muted-foreground hover:bg-muted'}`}>
+            {s} ({counts[s] ?? 0})
+          </button>)}
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link to="/imports/knitting-po-planning" className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-sm font-medium hover:bg-muted"><FileUp className="size-4"/> Import PO planner</Link>
-          <Link to="/imports/knitting-completion" className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-sm font-medium hover:bg-muted"><FileUp className="size-4"/> Import completions</Link>
-          <Button variant="ghost" size="sm" onClick={() => { void pos.refetch(); void tracker.refetch(); }}><RotateCcw /> Refresh</Button>
-        </div>
-      </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Field label="Track by date" htmlFor="po-date-basis"><Select id="po-date-basis" value={basis} onChange={(e) => setBasis(e.target.value)}><option value="PO_DATE">PO date</option><option value="KNITTING_COMPLETED_AT">Knitting completion date</option><option value="EXPECTED_DELIVERY_DATE">Expected delivery (EDD)</option></Select></Field>
-        <Field label="From" htmlFor="po-from"><Input id="po-from" type="date" max={to || undefined} value={from} onChange={(e) => setFrom(e.target.value)}/></Field>
-        <Field label="To" htmlFor="po-to"><Input id="po-to" type="date" min={from || undefined} value={to} onChange={(e) => setTo(e.target.value)}/></Field>
-        <Field label="PO number / fabric" htmlFor="po-quick-search"><Input id="po-quick-search" placeholder="Search a PO or fabric" value={searchPo} onChange={(e) => setSearchPo(e.target.value)}/></Field>
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
-        <span><CalendarDays className="mr-1 inline size-3.5"/>{filteredPO.length.toLocaleString('en-IN')} PO lines</span>
-        <span>Planned: <b className="text-foreground">{formatNumber(totalPlanned)} KG</b></span>
-        <span>Produced: <b className="text-foreground">{formatNumber(totalProduced)} KG</b></span>
-        {(from || to || searchPo) && <Button size="sm" variant="ghost" onClick={() => { setFrom(''); setTo(''); setSearchPo(''); }}>Clear filters</Button>}
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Clock3 className="size-4"/>Production timestamps: IST</p>
       </div>
     </Panel>
-
-    
-    <div className="mb-5">
-      <DataTable rows={filteredPO} columns={poColumns} isLoading={pos.isLoading} searchable={false} title="Knitting PO lines" description="Click a line to record production or link its job card" onRowClick={(r) => setLine(r)} exportName="knitting-po-tracker" emptyDescription="Try clearing the date filters or import a PO planner."/>
-    </div>
-
-    <div id="job-card-section" className="mb-3 flex flex-wrap items-center justify-between gap-2">
-      <div><h2 className="text-base font-semibold">Job card stages</h2><p className="text-xs text-muted-foreground">Original production stages retained; Knitting appears before Recipe. Unlinked job cards remain visible.</p></div>
-      {selectedPO && <Button size="sm" variant="outline" onClick={() => setSelectedPO('')}>Clear PO filter: {selectedPO}</Button>}
-      {!selectedPO && <span className="text-xs text-muted-foreground">To filter job cards by PO, select a PO line above, then use “Show linked job cards”.</span>}
-    </div>
-    <DataTable rows={jobRows} columns={jobColumns} isLoading={tracker.isLoading} error={tracker.error ? errorMessage(tracker.error) : null} onRetry={() => tracker.refetch()} exportName="job-card-tracker" emptyDescription={selectedPO ? 'No linked job cards for this PO yet.' : undefined}/>
-    {line && <EditKnittingDialog key={poLineId(line)} line={line} onClose={() => setLine(null)} onShowCards={() => { setSelectedPO(poNumber(line)); setLine(null); document.getElementById('job-card-section')?.scrollIntoView({ behavior: 'smooth' }); }}/>}
-  </>;
+    <DataTable
+      rows={rows} columns={columns} title="Job card / lot records"
+      description="Click any row for a chronological event timeline. Dates no longer show raw ISO strings."
+      isLoading={query.isPending} error={query.isError ? errorMessage(query.error) : null}
+      onRetry={() => query.refetch()} onRowClick={setSelected}
+      exportName="dyeing-lot-timeline" maxHeight="65vh"
+      emptyTitle="No matching job-card lines"
+      emptyDescription="Try All statuses, or upload ERP Open Job Cards to populate the timeline."
+    />
+    <p className="text-xs text-muted-foreground">
+      Status comes only from recorded job-card stage/closure data; it does not certify quantity completion. The same job-card event may appear for several order allocation lines.
+    </p>
+    <Dialog open={!!selected} onOpenChange={open => {if(!open) setSelected(null)}}
+      title={`Job Card ${pickString(selected, 'JOBCARDNO') || '—'}`}
+      description={`Lot ${pickString(selected, 'MANUALLOTNO') || '—'} · ERP Order ${pickString(selected, 'ORDERID') || '—'}`}
+      className="max-w-2xl">
+      {selected && <Detail row={selected}/>} 
+    </Dialog>
+  </div>;
 }

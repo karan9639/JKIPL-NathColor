@@ -5,8 +5,9 @@ import { findNavItem } from '@/constants/navigation';
 import { LoadingState, EmptyState } from '@/components/ui/panel';
 
 export function RequireAuth({ children }) {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, ready } = useAuth();
     const location = useLocation();
+    if (!ready) return <LoadingState />;
     if (!isAuthenticated)
         return <Navigate to="/login" replace state={{ from: location.pathname }}/>;
     return children;

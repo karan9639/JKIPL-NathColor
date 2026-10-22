@@ -3,7 +3,7 @@ import { session } from '@/services/auth/session';
 import { asRows } from '@/utils/format';
 
 export function normalizeSearch(query) {
-    return String(query ?? '').toUpperCase().split(/\s+/).filter(Boolean).sort().join(' ');
+    return String(query ?? '').trim().replace(/\s+/g, ' ');
 }
 
 function extractOrderRows(response) {
@@ -109,6 +109,10 @@ export const ordersService = {
         return { rows, totalPending: Number(data?.totalPending ?? 0), totalMtr: Number(data?.totalMtr ?? 0), hasMore: rows.length > 0 };
     },
 
+    async fetchOrderSummary(orderId) {
+      const {data} = await http.get(`/orderbook/${encodeURIComponent(orderId)}/summary`);
+      return data?.data ?? data;
+    },
     /** Upload normalized records parsed from the Order Book file. */
     async createOrderBook(orders) {
   if (!Array.isArray(orders) || orders.length === 0) {

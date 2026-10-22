@@ -8,13 +8,16 @@ import { LoginPage } from '@/pages/login';
 import { STAGES } from '@/constants/production-stages';
 const DashboardPage = lazy(() => import('@/pages/dashboard'));
 const OrdersPage = lazy(() => import('@/pages/orders'));
+const OrderTrackerPage = lazy(() => import('@/pages/order-tracker'));
 const DyeingProgramsPage = lazy(() => import('@/pages/dyeing-programs'));
 const GreigeStockPage = lazy(() => import('@/pages/stock/greige'));
 const YarnStockPage = lazy(() => import('@/pages/stock/yarn'));
+const JobCardLotsPage = lazy(() => import('@/pages/stock/job-card-lots'));
 const RecipesPage = lazy(() => import('@/pages/recipes'));
 const StageEntryPage = lazy(() => import('@/pages/production/stage-entry'));
 const InProgressPage = lazy(() => import('@/pages/production/in-progress'));
 const TrackerPage = lazy(() => import('@/pages/production/tracker'));
+const Unit3POPlannerPage = lazy(() => import('@/pages/unit3/po-planner'));
 const RecordsPage = lazy(() => import('@/pages/production/records'));
 const ReportPages = lazy(() => import('@/pages/reports'));
 const ImportsRouter = lazy(() => import('@/pages/imports'));
@@ -31,18 +34,22 @@ export function App() {
               <AppShell />
             </RequireAuth>}>
           <Route index element={<Guard><DashboardPage /></Guard>}/>
+          <Route path="orders/tracker" element={<Guard><OrderTrackerPage /></Guard>}/>
           <Route path="orders/all" element={<Guard><OrdersPage key="all" menuKey="SearchOrdersPageKey"/></Guard>}/>
           <Route path="orders/domestic" element={<Guard><OrdersPage key="dom" menuKey="DomesticPendingOrdersPageKey"/></Guard>}/>
           <Route path="orders/brands" element={<Guard><OrdersPage key="brand" menuKey="BrandsPendingOrdersPageKey"/></Guard>}/>
           <Route path="dyeing-programs" element={<Guard><DyeingProgramsPage /></Guard>}/>
           <Route path="stock/greige" element={<Guard><GreigeStockPage /></Guard>}/>
           <Route path="stock/yarn" element={<Guard><YarnStockPage /></Guard>}/>
+          <Route path="stock/job-card-lots" element={<Guard><JobCardLotsPage /></Guard>}/>
           <Route path="recipes" element={<Guard><RecipesPage /></Guard>}/>
           {STAGES.map((stage) => (<Route key={stage.slug} path={`production/${stage.slug}`} element={<Guard><StageEntryPage key={stage.slug} stage={stage}/></Guard>}/>))}
           <Route path="production/in-progress" element={<Guard><InProgressPage /></Guard>}/>
           <Route path="production/tracker" element={<Guard><TrackerPage /></Guard>}/>
+          <Route path="unit3/po-planner" element={<Guard><Unit3POPlannerPage /></Guard>}/>
           <Route path="production/records" element={<Guard><RecordsPage /></Guard>}/>
           <Route path="reports/:report" element={<Guard><ReportPages /></Guard>}/>
+          <Route path="imports/knitting-completion" element={<Navigate to="/imports/knitting-po-planning" replace/>}/>
           <Route path="imports/:kind" element={<Guard><ImportsRouter /></Guard>}/>
           <Route path="tools/gsm" element={<Guard><GsmPage /></Guard>}/>
           <Route path="tools/qr" element={<Guard><QrPage /></Guard>}/>

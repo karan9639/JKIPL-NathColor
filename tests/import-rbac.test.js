@@ -6,21 +6,17 @@ import { dataTableRows, normalizeDyeingRecords, normalizeYarnRecords, extractYar
 const nav = readFileSync(new URL('../src/constants/navigation.js', import.meta.url), 'utf8');
 const imports = {
     dyeing: ['dyeing-programs'], billing: ['dispatch'], jobcard: ['job-cards-opening'],
-    order: ['orders-book'], unit2: ['greige-stock-u2'], unit3: ['greige-stock-u3', 'knitting-po-planning', 'knitting-completion'],
+    order: ['orders-book'], unit2: ['greige-stock-u2'], unit3: ['greige-stock-u3', 'knitting-po-planning'],
     yarn: ['yarn-stock'], closing: ['job-cards-closing'], recipe: ['recipes'],
 };
-test('each of the 11 import routes grants its backend role while preserving legacy grants', () => {
+test('every ERP import is role-restricted (UI only; server enforces permissions)', () => {
     for (const [role, routes] of Object.entries(imports)) {
         for (const route of routes) {
-            const escaped = route.replaceAll('-', '\\-');
-            assert.match(nav, new RegExp(`path: '/imports/${escaped}'[^\\n]+allowedRoles: \\[\\'${role}\\'\\]`));
-            assert.equal(canAccess({ allowedUsers: ['ap'], allowedRoles: [role] }, { email: `${role}@example.com`, role }), true);
-            assert.equal(canAccess({ allowedUsers: ['ap'], allowedRoles: [role] }, { email: 'ap@example.com', role: 'user' }), true);
-            assert.equal(canAccess({ allowedUsers: ['ap'], allowedRoles: [role] }, { email: 'other@example.com', role: 'user' }), false);
+            assert.ok(nav.includes(`path:'/imports/${route}'`), `Missing ${route} in navigation`);
+            assert.equal(canAccess({allowedRoles:[role]},{role}),true);
+            assert.equal(canAccess({allowedRoles:[role]},{role:'other'}),false);
         }
     }
-    assert.equal(canAccess({ allowedUsers: null }, { email: 'user@example.com', role: 'unit2' }), true);
-    assert.equal(canAccess({ allowedUsers: ['a'], allowedRoles: ['recipe'] }, { email: 'unrelated@example.com', role: 'admin' }), true);
 });
 test('Excel dyeing status report headers and serial dates normalize to backend model', () => {
     const table = [

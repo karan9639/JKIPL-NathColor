@@ -7,8 +7,8 @@ import { DataTable } from '@/components/ui/data-table';
 import { EmptyState, PageHeader, Stat } from '@/components/ui/panel';
 const REPORTS = {
     'greige-requisition': {
-        title: 'Greige Requisition Summary',
-        description: 'Number of requisitions and tonnage requested per day.',
+        title: 'Dyeing Schedule Summary',
+        description: 'Imported dyeing schedule lines and planned tonnage by date; not a separate issue transaction.',
         queryFn: reportsService.greigeRequisitionSummary,
         columns: [
             { key: 'REQ_DATE', label: 'Date', render: (r) => <span className="font-medium">{formatDate(r.REQ_DATE)}</span> },
@@ -21,8 +21,8 @@ const REPORTS = {
         ],
     },
     'greige-issued': {
-        title: 'Greige Issued Summary',
-        description: 'Lots and tonnage issued to dyeing per day.',
+        title: 'Job Cards Issued Summary',
+        description: 'Distinct job cards and imported job-card quantities per day.',
         queryFn: reportsService.greigeIssuedSummary,
         columns: [
             { key: 'JOBCARDDATE', label: 'Date', render: (r) => <span className="font-medium">{formatDate(r.JOBCARDDATE)}</span> },
@@ -57,8 +57,8 @@ export default function ReportPages() {
     return (<>
       <PageHeader title={def.title} description={def.description}/>
       {def.totals && (<div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {def.totals.map(([key, label], i) => (<Stat key={key} label={`Total ${label.toLowerCase()}`} value={formatNumber(rows.reduce((s, r) => s + toNumber(r[key]), 0))} tone={i === 0 ? 'primary' : 'default'}/>))}
-          <Stat label="Days" value={rows.length}/>
+          {def.totals.map(([key, label], i) => (<Stat key={key} label={`Total ${label.toLowerCase()}`} value={query.isError || query.isLoading ? '—' : formatNumber(rows.reduce((s, r) => s + toNumber(r[key]), 0))} tone={i === 0 ? 'primary' : 'default'}/>))}
+          <Stat label="Days" value={query.isError || query.isLoading ? '—' : rows.length}/>
         </div>)}
       <DataTable rows={rows} columns={def.columns} isLoading={query.isLoading} error={query.error ? errorMessage(query.error) : null} onRetry={() => query.refetch()} exportName={report}/>
     </>);

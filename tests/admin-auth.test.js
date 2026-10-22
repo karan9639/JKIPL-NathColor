@@ -54,14 +54,13 @@ test('roles are normalized and admin is not inferred from email alone', () => {
     assert.equal(canAccess(recipes, { email: 'prashant@natharts.com', role: 'staff' }), false);
 });
 
-test('non-admin legacy users keep their per-module permissions', () => {
-    assert.equal(canAccess(recipes, { email: 'dilip@example.com', role: 'user' }), true);
-    assert.equal(canAccess(knitting, { email: 'shubham@example.com', role: 'user' }), true);
-    assert.equal(canAccess(knitting, { email: 'dilip@example.com', role: 'user' }), false);
-    assert.equal(canAccess(recipes, 'ap'), true);
-    assert.equal(canAccess(everyone, { email: 'other@example.com', role: 'user' }), true);
+test('legacy username grants cannot bypass role authorization',()=>{
+ const item={allowedRoles:['dyeing'],allowedUsers:['anyone']};
+ assert.equal(canAccess(item,{role:'dyeing',email:'staff@example.com'}),true);
+ assert.equal(canAccess(item,{role:'billing',email:'anyone@example.com'}),false);
+ assert.equal(canAccess({allowedUsers:['someone']},{role:'billing'}),false);
+ assert.equal(canAccess({},{role:'billing'}),true);
 });
-
 test('explicit failed responses cannot authenticate using stale token fields', () => {
     assert.equal(isSuccessfulLoginResponse({ success: false, token: 'stale' }), false);
     assert.equal(isSuccessfulLoginResponse({ success: false }), false);

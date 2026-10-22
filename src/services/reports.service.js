@@ -100,7 +100,7 @@ export const reportsService = {
             return {
                 Report: source,
                 LUD: row.lastUpdatedAt ?? row.LUD ?? null,
-                USERNAME: details.owner,
+                USERNAME: row.importedBy ?? '—',
                 REMARKS: details.remarks,
             };
         });

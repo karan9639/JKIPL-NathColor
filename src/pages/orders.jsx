@@ -36,10 +36,9 @@ const orderBookColumns = [
     { key: 'upperFabricName', label: 'Fabric', className: 'max-w-64 truncate' },
     { key: 'upperColor', label: 'Color' },
     { key: 'quantity', label: 'Ord qty', align: 'right', render: (r) => formatNumber(r.quantity) },
-    { key: 'issued', label: 'Issued', align: 'right', render: () => formatNumber(0) },
-    { key: 'dispatched', label: 'Dispatched', align: 'right', render: () => formatNumber(0) },
-    { key: 'balance', label: 'Balance', align: 'right', render: (r) => <span className="font-semibold">{formatNumber(r.quantity)}</span> },
-    { key: 'status', label: 'Status', render: (r) => formatCell(r.storeType) },
+    { key: 'uom', label: 'UOM' },
+    { key: 'refPO', label: 'Customer PO' },
+    { key: 'storeType', label: 'Store type', render: (r) => formatCell(r.storeType) },
 ];
 export default function OrdersPage({ menuKey }) {
     const meta = TITLES[menuKey];
@@ -69,7 +68,12 @@ export default function OrdersPage({ menuKey }) {
         : (legacyQuery.data?.pages.flatMap((page) => page.rows) ?? []);
     const first = isOrderBook ? orderBookQuery.data : legacyQuery.data?.pages[0];
     const pagination = orderBookQuery.data?.pagination;
-    const loadedBalance = rows.reduce((sum, row) => sum + toNumber(isOrderBook ? row.quantity : row.BALKGS), 0);
+    const quantitiesByUnit = rows.reduce((map,row) => {
+      const unit = String(row.uom || 'UNSPECIFIED').toUpperCase().trim();
+      map[unit] = (map[unit] || 0) + toNumber(row.quantity);
+      return map;
+    }, {});
+    const loadedBalance = rows.reduce((sum,row) => sum + toNumber(row.BALKGS), 0);
     const columns = isOrderBook ? orderBookColumns : legacyColumns;
 
     return (<>
@@ -103,13 +107,20 @@ export default function OrdersPage({ menuKey }) {
       </form>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Total pending (kg)" value={formatNumber(first?.totalPending ?? 0, 0)} tone="primary"/>
-        <Stat label="Total pending (m)" value={formatNumber(first?.totalMtr ?? 0, 0)}/>
-        <Stat label="Orders loaded" value={rows.length.toLocaleString('en-IN')}/>
-        <Stat label="Loaded balance (kg)" value={formatNumber(loadedBalance, 0)}/>
+        {isOrderBook ? <>
+          <Stat label="Order lines on this page" value={rows.length.toLocaleString('en-IN')} tone="primary"/>
+          <Stat label="Ordered MTR (page)" value={formatNumber((quantitiesByUnit.MTR||0)+(quantitiesByUnit.METERS||0),2)}/>
+          <Stat label="Ordered KG (page)" value={formatNumber((quantitiesByUnit.KG||0)+(quantitiesByUnit.KGS||0),2)}/>
+          <Stat label="Other UOM lines" value={rows.filter(r=>!['MTR','METERS','KG','KGS'].includes(String(r.uom||'').toUpperCase())).length}/>
+        </> : <>
+          <Stat label="Total pending KG" value={formatNumber(first?.totalPending ?? 0,0)} tone="primary"/>
+          <Stat label="Total pending M" value={formatNumber(first?.totalMtr ?? 0,0)}/>
+          <Stat label="Orders loaded" value={rows.length.toLocaleString('en-IN')}/>
+          <Stat label="Loaded balance KG" value={formatNumber(loadedBalance,0)}/>
+        </>}
       </div>
 
-      <DataTable rows={rows} columns={columns} isLoading={query.isLoading} error={query.error ? errorMessage(query.error) : null} onRetry={() => query.refetch()} exportName={meta.title.toLowerCase().replace(/\s+/g, '-')} description={search ? `Results for "${search}"` : 'Click an order for lots and dispatch details'} onRowClick={setSelected} emptyDescription={search ? 'Try fewer or different keywords.' : undefined} footer={!isOrderBook && (legacyQuery.hasNextPage || legacyQuery.isFetchingNextPage) ? (<div className="flex justify-center">
+      <DataTable rows={rows} columns={columns} isLoading={query.isLoading} error={query.error ? errorMessage(query.error) : null} onRetry={() => query.refetch()} exportName={meta.title.toLowerCase().replace(/\s+/g, '-')} description={search ? `Results for "${search}"` : 'Click an order to see imported order facts and linked schedule/job cards'} onRowClick={setSelected} emptyDescription={search ? 'Try fewer or different keywords.' : undefined} footer={!isOrderBook && (legacyQuery.hasNextPage || legacyQuery.isFetchingNextPage) ? (<div className="flex justify-center">
               <Button variant="outline" onClick={() => legacyQuery.fetchNextPage()} loading={legacyQuery.isFetchingNextPage}>
                 Load more orders
               </Button>

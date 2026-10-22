@@ -1,5 +1,6 @@
 import { humanizeKey } from './format.js';
 import { normalizeDyeingRecords, normalizeYarnRecords } from './import-mappers.js';
+import { preflightJobCards } from './jobcard-import-preview.js';
 
 export function flattenForPreview(row) {
     return Object.fromEntries(Object.entries(row).flatMap(([name, value]) =>
@@ -12,6 +13,7 @@ export function summarize(result) {
         .map(([k, v]) => [humanizeKey(k), Array.isArray(v) ? String(v.length) : String(v)]);
 }
 export function normalizeRecords(def, sourceRows) {
+    if (def.endpoint === '/insertJobCards') return preflightJobCards(sourceRows);
     if (def.backend === 'dyeing') return normalizeDyeingRecords(sourceRows);
     if (def.backend === 'yarn') return normalizeYarnRecords(sourceRows);
     return { rows: sourceRows, errors: [] };

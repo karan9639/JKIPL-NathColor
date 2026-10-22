@@ -1,3 +1,4 @@
+import { loadAllStockPages } from './stock-pagination.js';
 import { http } from '@/services/http/client';
 
 function extractRows(response, keys) {
@@ -97,6 +98,8 @@ function normalizeU3Stocks(stocks) {
 }
 
 export const greigeStockService = {
+    fetchAllU2: () => loadAllStockPages((params) => http.get('/u2greige/fetch-stock', {params})),
+    fetchAllU3: () => loadAllStockPages((params) => http.get('/u3greige/fetch-stock', {params})),
     async fetchU2(params = {}) {
         const { data } = await http.get('/u2greige/fetch-stock', { params });
         return extractRows(data, ['u2GreigeStocks', 'u2GreigeStock', 'greigeStocks', 'greigeStock', 'stocks', 'records', 'rows', 'items']);
@@ -120,7 +123,6 @@ export const greigeStockService = {
         if (!Array.isArray(stocks) || stocks.length === 0) throw new Error('No Unit 3 greige stock rows to upload.');
         const normalizedStocks = normalizeU3Stocks(stocks);
         if (!normalizedStocks.length) throw new Error('No valid Unit 3 stock rows found. Check the Item Name column.');
-        console.log('Unit 3 payload preview:', normalizedStocks[0]);
         const { data } = await http.post('/u3greige/create-stock', { stocks: normalizedStocks });
         if (data?.success === false) throw new Error(data.message ?? 'Could not upload Unit 3 greige stock.');
         return { ...(data?.data && typeof data.data === 'object' ? data.data : {}), message: data?.message ?? 'Unit 3 greige stock uploaded successfully.' };

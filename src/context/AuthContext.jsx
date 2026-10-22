@@ -1,8 +1,8 @@
-import { createContext, useCallback, useEffect, useMemo } from 'react';
+import { createContext, useCallback, useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { signedIn, signedOut, logoutStarted } from '@/state/store';
 import { useQueryClient } from '@tanstack/react-query';
-import { setUnauthorizedHandler } from '@/services/http/client';
+import { http, setUnauthorizedHandler } from '@/services/http/client';
 import { loginUser, logoutUser } from '@/services/auth/auth.service';
 import { session } from '@/services/auth/session';
 import { canAccess } from '@/constants/permissions';
@@ -14,6 +14,7 @@ export function AuthProvider({ children }) {
     const queryClient = useQueryClient();
     const dispatch = useDispatch();
     const { username, user, isLoggingOut } = useSelector((state) => state.auth);
+    const [ready, setReady] = useState(false);
 
     const logout = useCallback(async () => {
         dispatch(logoutStarted());
@@ -27,6 +28,24 @@ export function AuthProvider({ children }) {
             dispatch(signedOut());
         }
     }, [queryClient, dispatch]);
+
+    useEffect(() => {
+        let active = true;
+        const verify = async () => {
+            if (!session.getUsername()) { if (active) setReady(true); return; }
+            try {
+                const { data } = await http.get('/user/me');
+                if (!active) return;
+                const account = userFromLoginResponse(data, session.getUsername());
+                session.save(null, account.username, '', account);
+                dispatch(signedIn({ username: account.username, user: account }));
+            } catch {
+                if (active) { session.clear(); dispatch(signedOut()); }
+            } finally { if (active) setReady(true); }
+        };
+        void verify();
+        return () => {active = false;};
+    }, [dispatch]);
 
     useEffect(() => {
         localStorage.removeItem('nc.device_uuid');
@@ -61,11 +80,12 @@ export function AuthProvider({ children }) {
         role: user?.role ?? '',
         isAdmin: user?.role === 'admin',
         isLoggingOut,
-        isAuthenticated: Boolean(username),
+        ready,
+        isAuthenticated: Boolean(username) && ready,
         login,
         logout,
         can: (item) => canAccess(item, user ?? username),
-    }), [username, user, isLoggingOut, login, logout]);
+    }), [username, user, ready, isLoggingOut, login, logout]);
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -11,7 +11,7 @@ const yarnPage = readFileSync(new URL('../src/pages/stock/yarn.jsx', import.meta
 test('GET endpoints for both live screens match Express routes; legacy endpoints are not used by their methods', () => {
     const dyeingSection = dyeingServiceCode.split('dyeingPrograms(params')[1].split('async createDyeingPrograms')[0];
     const yarnSection = yarnServiceCode.split('yarnStock(params')[1].split('async createImportedYarnStock')[0];
-    assert.match(dyeingSection, /fetchImportPage\('\/dyeing\/fetch-dyeingprogram', 'dyeingPrograms'/);
+    assert.match(dyeingSection, /fetchImportPage\(\s*'\/dyeing\/fetch-dyeingprogram',\s*'dyeingPrograms'/);
     assert.match(yarnSection, /fetchImportPage\('\/yarn\/fetch-yarnstock', 'yarnStocks'/);
     assert.doesNotMatch(dyeingSection, /searchorders/);
     assert.doesNotMatch(yarnSection, /getYarnStock/);
@@ -56,25 +56,8 @@ test('reject unexpected API shapes rather than silently rendering zero rows', ()
     assert.throws(() => readImportPage({ data: { unrelated: [] } }, 'yarnStocks'), /Unexpected yarnStocks API response/);
 });
 
-test('mock Express contract: creating a dyeing schedule is visible through the live read endpoint', async () => {
-    const { mockAdapter } = await import('../src/services/mock/adapter.js');
-    const dyeing = { dyeingScheduleDate: '2026-10-14', dyeingScheduleNo: 'DYE-TEST-001', orderId: 'ORDER-TEST-001', orderDate: '2026-10-13', deliveryDate: '2026-10-20', customerName: 'Example Customer', itemName: 'Example Fabric', quantityKgs: 13 };
-    const res = await mockAdapter({ url: '/dyeing/create-dyeingprogram', method: 'post', data: JSON.stringify({ dyeingPrograms: [dyeing] }) });
-    assert.equal(res.status, 201);
-    const fetched = await mockAdapter({ url: '/dyeing/fetch-dyeingprogram', method: 'get', params: { date: '2026-10-14', limit: 100, page: 1 } });
-    const page = readImportPage(fetched.data, 'dyeingPrograms');
-    assert.equal(page.rows.some((r) => r.dyeingScheduleNo === 'DYE-TEST-001'), true);
-    const search = await mockAdapter({ url: '/dyeing/fetch-dyeingprogram', method: 'get', params: { search: 'example customer' } });
-    assert.equal(readImportPage(search.data, 'dyeingPrograms').pagination.totalEntries >= 1, true);
-});
-
-test('mock Express contract: uploaded yarn stock is visible in the nested read model', async () => {
-    const { mockAdapter } = await import('../src/services/mock/adapter.js');
-    const yarn = { mainGroup: 'RAW', mainProduct: 'YARN', subGroup: 'COTTON', itemCode: 'YRN-TEST-001', itemName: 'Example Yarn', uom: 'KGS', closing: { qty: 275, value: 4400, rate: 16 } };
-    const res = await mockAdapter({ url: '/yarn/create-yarnstock', method: 'post', data: JSON.stringify({ reportPeriod: { fromDate: '2026-10-01', toDate: '2026-10-14' }, yarnStocks: [yarn] }) });
-    assert.equal(res.status, 201);
-    const fetched = await mockAdapter({ url: '/yarn/fetch-yarnstock', method: 'get', params: { date: '2026-10-14', page: 1, limit: 100 } });
-    const page = readImportPage(fetched.data, 'yarnStocks');
-    assert.equal(page.rows.some((r) => r.itemCode === 'YRN-TEST-001' && r.closing.qty === 275), true);
-    assert.equal(page.pagination.totalEntries >= 1, true);
+test('no mock API fallback remains in runtime client', () => {
+ const code=readFileSync(new URL('../src/services/http/client.js',import.meta.url),'utf8');
+ assert.doesNotMatch(code,/mockAdapter|\/mock-api/);
+ assert.match(code,/withCredentials:\s*true/);
 });

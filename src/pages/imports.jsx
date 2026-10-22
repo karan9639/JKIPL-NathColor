@@ -10,10 +10,11 @@ import { greigeStockService } from '@/services/greige-stock.service';
 import { importsService } from '@/services/imports.service';
 import { errorMessage } from '@/services/http/client';
 import { config } from '@/config/env';
-import { chunk, exportRowsToXlsx, parseClipboardTable, readHtmlTables, readWorkbook, zipFile } from '@/utils/spreadsheet';
-import { extractYarnTable, dataTableRows } from '@/utils/import-mappers';
-import { COMPLETION_TEMPLATE, normalizeCompletionSheet, normalizePlanningSheet } from '@/utils/knitting';
+import { chunk, exportRowsToXlsx, parseClipboardTable, readHtmlTables, readWorkbook } from '@/utils/spreadsheet';
+import { extractYarnTable, extractOrderBookTable, dataTableRows } from '@/utils/import-mappers';
+import { normalizePlanningSheet } from '@/utils/knitting';
 import { humanizeKey } from '@/utils/format';
+import { normalizeU3GreigeSheet } from '@/utils/u3-ledger';
 import { IMPORTS } from '@/constants/imports';
 import { flattenForPreview, summarize, normalizeRecords } from '@/utils/import-transform';
 import { Button } from '@/components/ui/button';
@@ -22,99 +23,6 @@ import { DataTable } from '@/components/ui/data-table';
 import { EmptyState, PageHeader, Panel, PanelHeader, Stat } from '@/components/ui/panel';
 
 
-function normalizeU3GreigeSheet(table) {
-    if (!Array.isArray(table) || table.length === 0) {
-        throw new Error('The selected Excel sheet is empty.');
-    }
-
-    const norm = (value) => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
-    const headerIndex = table.findIndex((row) =>
-        Array.isArray(row) && row.some((cell) => norm(cell) === 'item name')
-    );
-
-    if (headerIndex < 0) {
-        throw new Error('Could not find the "Item Name" header in the Excel sheet.');
-    }
-
-    const header = table[headerIndex] ?? [];
-    const subHeader = table[headerIndex + 1] ?? [];
-    const width = Math.max(header.length, subHeader.length);
-    const groups = [];
-    let activeGroup = '';
-    const groupNames = new Set(['opening', 'receipt', 'issue', 'closing', 'last received', 'last issue']);
-
-    for (let i = 0; i < width; i += 1) {
-        const value = norm(header[i]);
-        if (groupNames.has(value)) activeGroup = value;
-        else if (value && !['item name', 'uom', '-', '—'].includes(value)) activeGroup = value;
-        else if (['item name', 'uom'].includes(value)) activeGroup = value;
-        groups[i] = activeGroup;
-    }
-
-    const findSimple = (name) => header.findIndex((cell) => norm(cell) === name);
-    const findGrouped = (group, sub) => {
-        for (let i = 0; i < width; i += 1) {
-            if (groups[i] === group && norm(subHeader[i]) === sub) return i;
-        }
-        return -1;
-    };
-    const findGroupQty = (group, sub) => {
-        const direct = findGrouped(group, sub);
-        if (direct >= 0) return direct;
-        // Some Excel exports put Qty/Kgs labels on the row below a merged group heading.
-        for (let i = 0; i < width; i += 1) {
-            if (groups[i] === group && norm(subHeader[i]).includes(sub)) return i;
-        }
-        return -1;
-    };
-    const itemNameIndex = findSimple('item name');
-    const uomIndex = findSimple('uom');
-    if (itemNameIndex < 0) throw new Error('Could not locate the Item Name column.');
-
-    const readCell = (row, index) => index >= 0 ? row[index] : undefined;
-    const number = (value) => {
-        if (value === undefined || value === null || String(value).trim() === '' || ['-', '—'].includes(String(value).trim())) return 0;
-        const parsed = Number(String(value).replace(/,/g, '').trim());
-        return Number.isFinite(parsed) ? parsed : 0;
-    };
-    const dateValue = (value) => {
-        if (value === undefined || value === null || String(value).trim() === '' || ['-', '—'].includes(String(value).trim())) return null;
-        return value;
-    };
-
-    const columns = {
-        openingQty: findGroupQty('opening', 'qty'),
-        openingQtyKgs: findGroupQty('opening', 'qty kgs'),
-        receiptQty: findGroupQty('receipt', 'qty'),
-        receiptQtyKgs: findGroupQty('receipt', 'qty kgs'),
-        issueQty: findGroupQty('issue', 'qty'),
-        issueQtyKgs: findGroupQty('issue', 'qty kgs'),
-        closingQty: findGroupQty('closing', 'qty'),
-        closingQtyKgs: findGroupQty('closing', 'qty kgs'),
-        lastReceivedDate: findGrouped('last received', 'date'),
-        lastReceivedQtyKgs: findGroupQty('last received', 'qty kgs'),
-        lastIssueDate: findGrouped('last issue', 'date'),
-        lastIssueQtyKgs: findGroupQty('last issue', 'qty kgs'),
-    };
-
-    return table.slice(headerIndex + 2)
-        .filter(Array.isArray)
-        .map((row) => {
-            const itemName = String(readCell(row, itemNameIndex) ?? '').trim();
-            if (!itemName || ['-', '—', 'item name'].includes(norm(itemName))) return null;
-            return {
-                itemName,
-                uom: String(readCell(row, uomIndex) ?? '').trim(),
-                opening: { qty: number(readCell(row, columns.openingQty)), qtyKgs: number(readCell(row, columns.openingQtyKgs)) },
-                receipt: { qty: number(readCell(row, columns.receiptQty)), qtyKgs: number(readCell(row, columns.receiptQtyKgs)) },
-                issue: { qty: number(readCell(row, columns.issueQty)), qtyKgs: number(readCell(row, columns.issueQtyKgs)) },
-                closing: { qty: number(readCell(row, columns.closingQty)), qtyKgs: number(readCell(row, columns.closingQtyKgs)) },
-                lastReceived: { date: dateValue(readCell(row, columns.lastReceivedDate)), qtyKgs: number(readCell(row, columns.lastReceivedQtyKgs)) },
-                lastIssue: { date: dateValue(readCell(row, columns.lastIssueDate)), qtyKgs: number(readCell(row, columns.lastIssueQtyKgs)) },
-            };
-        })
-        .filter(Boolean);
-}
 
 export default function ImportsRouter() {
     const { kind = '' } = useParams();
@@ -132,6 +40,8 @@ function ImportPage({ def }) {
     const [parsing, setParsing] = useState(false);
     const [progress, setProgress] = useState(null);
     const [result, setResult] = useState(null);
+    const [uploadError, setUploadError] = useState(null);
+    const [duplicateRows, setDuplicateRows] = useState(0);
     const [saved, setSaved] = useState(null);
     const [savedError, setSavedError] = useState('');
     const [savedLoading, setSavedLoading] = useState(false);
@@ -139,11 +49,14 @@ function ImportPage({ def }) {
     const [savedPage, setSavedPage] = useState(1);
 
     const finishParse = (sourceRows) => {
-        const { rows: clean, errors } = normalizeRecords(def, sourceRows);
+        const { rows: clean, errors, duplicateRows: repeated = 0 } = normalizeRecords(def, sourceRows);
+        setDuplicateRows(repeated);
+        setUploadError(null);
         setRows(clean);
         setIssues(errors);
         setResult(null);
         if (errors.length) toast.error(`${errors.length} row(s) need correction before upload.`);
+        else if (repeated) toast.info(`${repeated} exact duplicate ERP row(s) will be skipped.`);
         else if (!clean.length) toast.error('No data rows found. Check the report and headers.');
     };
     const parseFile = async (selectedFile) => {
@@ -151,23 +64,23 @@ function ImportPage({ def }) {
         setRows([]);
         setIssues([]);
         setResult(null);
-        if (def.source === 'zip') return;
+        setUploadError(null);
+        setDuplicateRows(0);
+        
         setParsing(true);
         try {
             if (def.backend === 'orderbook') {
                 // ERP exports may be real Excel workbooks or HTML tables saved with .xls.
                 const fileStart = await selectedFile.slice(0, 512).text().catch(() => '');
                 const looksLikeHtml = /<\s*(html|table|head|body)\b/i.test(fileStart);
-                let table;
                 if (/\.(html?|htm)$/i.test(selectedFile.name) || looksLikeHtml) {
                     const tables = await readHtmlTables(selectedFile);
-                    table = [...tables].sort((a, b) => b.length - a.length)[0] ?? [];
+                    finishParse(extractOrderBookTable(tables));
                 } else {
                     const book = await readWorkbook(selectedFile);
                     const sheet = book.sheetNames[0];
-                    table = book.sheetRows(sheet, false);
+                    finishParse(dataTableRows(book.sheetRows(sheet, false), ['ORDER ID', 'CUSTOMER NAME', 'ITEM NAME']));
                 }
-                finishParse(dataTableRows(table, [], 3));
             } else if (def.source === 'html') {
                 const tables = await readHtmlTables(selectedFile);
                 if (def.backend === 'yarn') {
@@ -176,7 +89,7 @@ function ImportPage({ def }) {
                     finishParse(records);
                 } else {
                     const biggest = [...tables].sort((a, b) => b.length - a.length)[0] ?? [];
-                    finishParse(dataTableRows(biggest, [], 3));
+                    finishParse(dataTableRows(biggest, def.endpoint === '/insertJobCards' ? ['ORDER ID','JOB CARD NO.','CUSTOMER NAME','ITEM NAME'] : [], 3));
                 }
             } else {
                 const book = await readWorkbook(selectedFile);
@@ -189,7 +102,7 @@ function ImportPage({ def }) {
                 if (def.backend === 'greige-u3') {
                     finishParse(normalizeU3GreigeSheet(table));
                 } else if (def.knittingFormat) {
-                    finishParse(def.knittingFormat === 'planning' ? normalizePlanningSheet(table, selectedFile.name) : normalizeCompletionSheet(table));
+                    finishParse(normalizePlanningSheet(table, selectedFile.name));
                 } else {
                     const required = def.backend === 'dyeing' ? ['Dyeing Schedule Date', 'Dyeing Schedule No.', 'Order ID'] : [];
                     finishParse(dataTableRows(table, required, def.extra?.unit === 'U-2' ? 2 : 3));
@@ -236,15 +149,14 @@ function ImportPage({ def }) {
                 }
                 return totals;
             }
-            if (def.source === 'zip') {
-                if (!file) throw new Error('Choose a file first');
-                return importsService.uploadZip(def.endpoint, await zipFile(file), `${file.name}.zip`);
-            }
             if (!rows.length || issues.length) throw new Error('Correct invalid rows before uploading.');
             if (def.backend === 'yarn' && (!period.fromDate || !period.toDate || period.fromDate > period.toDate)) {
                 throw new Error('Enter a valid stock report date range (From date must be on or before To date).');
             }
-            const batches = chunk(rows, def.chunkSize ?? rows.length);
+            if (['yarn', 'greige-u2', 'greige-u3'].includes(def.backend) && rows.length > 10000) {
+                throw new Error('A stock report must contain at most 10,000 records and be uploaded as one complete snapshot.');
+            }
+            const batches = ['yarn', 'greige-u2', 'greige-u3'].includes(def.backend) ? [rows] : chunk(rows, def.chunkSize ?? rows.length);
             const totals = {};
             setProgress({ done: 0, total: batches.length });
             for (const [i, batch] of batches.entries()) {
@@ -256,7 +168,7 @@ function ImportPage({ def }) {
                     else if (def.backend === 'greige-u3') res = await greigeStockService.createU3(batch);
                     else res = await importsService.postRows(def.endpoint, batch, { ...def.extra, ...(def.knittingFormat ? { source: 'excel', source_filename: file?.name ?? '' } : {}) });
                 } catch (error) {
-                    // insertMany is not idempotent. Keep only the NOT-YET-UPLOADED
+                    // import upserts use stable ERP identifiers. Keep only the NOT-YET-UPLOADED
                     // rows in the preview so retrying won't resubmit successful batches.
                     if (i > 0) {
                         throw new Error(`${i} batch(es) were uploaded before this request failed. Only the remaining ${rows.length - i * (def.chunkSize ?? rows.length)} rows are kept for retry. ${errorMessage(error)}`);
@@ -264,7 +176,9 @@ function ImportPage({ def }) {
                     throw error;
                 }
                 for (const [k, v] of Object.entries(res ?? {})) {
-                    totals[k] = typeof v === 'number' ? Number(totals[k] ?? 0) + v : Array.isArray(v) ? [...(totals[k] ?? []), ...v] : v;
+                    totals[k] = k === 'statusCounts' && v && typeof v === 'object'
+                        ? Object.fromEntries([...new Set([...Object.keys(totals[k] ?? {}), ...Object.keys(v)])].map(name => [name, Number(totals[k]?.[name] ?? 0) + Number(v[name] ?? 0)]))
+                        : typeof v === 'number' ? Number(totals[k] ?? 0) + v : Array.isArray(v) ? [...(totals[k] ?? []), ...v] : v;
                 }
                 setRows(rows.slice(Math.min(rows.length, (i + 1) * (def.chunkSize ?? rows.length))));
                 setProgress({ done: i + 1, total: batches.length });
@@ -272,9 +186,10 @@ function ImportPage({ def }) {
             return totals;
         },
         onSuccess: (res) => {
+            setUploadError(null);
             setResult(res ?? { message: 'Import complete' });
             setSaved(null);
-            setRows([]); // Prevent accidental double submission: backend insertMany is not an upsert.
+            setRows([]); // Avoid accidental resubmission; the import API uses ERP-keyed upserts.
             setFile(null);
             setPaste('');
             toast.success(String(res?.message ?? 'Import complete'));
@@ -285,7 +200,7 @@ function ImportPage({ def }) {
             void queryClient.invalidateQueries({ queryKey: ['greige-stock'] });
             void queryClient.invalidateQueries({ queryKey: ['orders'] });
         },
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => { setUploadError({ status: e.status, code: e.code, message: errorMessage(e) }); toast.error(errorMessage(e)); },
         onSettled: () => setProgress(null),
     });
     const loadSaved = async (page = 1) => {
@@ -302,9 +217,14 @@ function ImportPage({ def }) {
         } finally { setSavedLoading(false); }
     };
     const previewRows = rows.slice(0, 100).map(flattenForPreview);
-    const columns = previewRows[0] ? Object.keys(previewRows[0]).slice(0, 12).map((key) => ({ key, label: humanizeKey(key) })) : [];
+    const orderedPreviewKeys = def.backend === 'greige-u3' ? [
+        'itemName', 'uom', 'closing.qtyKgs', 'closing.qty', 'receipt.qtyKgs', 'issue.qtyKgs',
+        'lastReceived.date', 'lastReceived.qtyKgs', 'lastIssue.date', 'lastIssue.qtyKgs',
+        'opening.qtyKgs', 'opening.qty',
+    ] : Object.keys(previewRows[0] ?? {}).slice(0, 12);
+    const columns = previewRows[0] ? orderedPreviewKeys.map((key) => ({ key, label: humanizeKey(key), align: /qty|kgs/i.test(key) ? 'right' : 'left' })) : [];
     const errorRows = Array.isArray(result?.error_rows) ? result.error_rows : [];
-    const canUpload = def.source === 'zip' ? !!file : rows.length > 0 && !issues.length && !parsing && (def.backend !== 'yarn' || (!!period.fromDate && !!period.toDate && period.fromDate <= period.toDate));
+    const canUpload = rows.length > 0 && !issues.length && !parsing && (def.backend !== 'yarn' || (!!period.fromDate && !!period.toDate && period.fromDate <= period.toDate));
     const showUploadFile = def.source !== 'paste' || def.allowFile;
     const showPaste = def.source === 'paste' || def.allowPaste;
     const savedRows = def.backend === 'dyeing' ? saved?.dyeingPrograms ?? [] : saved?.yarnStocks ?? [];
@@ -312,6 +232,10 @@ function ImportPage({ def }) {
     const savedColumns = savedPreview[0] ? Object.keys(savedPreview[0]).filter((key) => !['_id', '__v'].includes(key)).slice(0, 12).map((key) => ({ key, label: humanizeKey(key) })) : [];
     return (<>
       <PageHeader title={def.title} description={def.description}/>
+      {def.knittingFormat === 'planning' && <div className="mb-4 rounded-lg border border-border bg-surface p-4 text-sm">
+        <p className="font-semibold">Unit-3 uses only the consolidated PO sheet</p>
+        <p className="mt-1 text-muted-foreground">The REMARKS cell controls the planning status: CLOSED = closed in the planner. HOLD and other notes remain separate. Update the same workbook and reimport it to refresh the status. The weekly machine grids, job card linking and separate completion sheets are not required.</p>
+      </div>}
       <Panel>
         <PanelHeader title="1. Select import data"/>
         <div className="flex flex-col gap-5 p-4">
@@ -339,6 +263,8 @@ function ImportPage({ def }) {
           </div>}
         </div>
       </Panel>
+      {duplicateRows > 0 && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{duplicateRows} repeated identical job-card row(s) skipped during preview. Distinct orders sharing the same Job Card No. are retained.</p>}
+      {uploadError && <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800"><strong>Upload failed{uploadError.status ? ` (${uploadError.status})` : ''}.</strong> <span>{uploadError.message}</span>{uploadError.code === 'JOBCARD_LEGACY_INDEX' && <p className="mt-2">Your MongoDB still has an old unique jobCardNo index. Ask the backend administrator to back up the database and run the migration from JOBCARD-IMPORT-FIX.md. Do not delete job cards to fix this.</p>}</div>}
       {!!issues.length && <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800" role="alert">
           <p className="font-semibold">{issues.length} invalid row(s) — upload is disabled until the file is corrected.</p>
           <ul className="mt-2 max-h-40 list-disc space-y-1 overflow-auto pl-5">{issues.slice(0, 30).map((issue, index) => <li key={index}>{issue}</li>)}</ul>
@@ -346,7 +272,7 @@ function ImportPage({ def }) {
       </div>}
       {(rows.length > 0 || parsing) && <DataTable rows={previewRows} columns={columns} isLoading={parsing} title="2. Review data" description={`${rows.length} valid row(s)${rows.length > 100 ? ' · previewing first 100' : ''}${columns.length === 12 ? ' · first 12 columns' : ''}`} searchable={false}/>}
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-        <Button size="lg" disabled={!canUpload || upload.isPending} loading={upload.isPending} onClick={() => upload.mutate()}><Upload aria-hidden="true"/>{def.source === 'zip' ? 'Upload file' : `Upload ${rows.length} rows`}</Button>
+        <Button size="lg" disabled={!canUpload || upload.isPending} loading={upload.isPending} onClick={() => upload.mutate()}><Upload aria-hidden="true"/>{`Upload ${rows.length} rows`}</Button>
         {progress && <p className="text-sm tabular text-muted-foreground" aria-live="polite">Batch {progress.done} of {progress.total}…</p>}
       </div>
       {result && <>

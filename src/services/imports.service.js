@@ -5,7 +5,7 @@ import { session } from '@/services/auth/session';
 export const importsService = {
     async postRows(endpoint, rows, extra = {}) {
         const { data } = await legacyHttp.post(endpoint, { ...extra, rows });
-        return data;
+        return data?.data && typeof data.data === 'object' ? { ...data.data, message: data.message, success: data.success } : data;
     },
     async postArray(endpoint, rows) {
         const { data } = await legacyHttp.post(endpoint, rows);

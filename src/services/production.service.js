@@ -27,14 +27,6 @@ export const productionService = {
         const { data } = await legacyHttp.get('/knitting/po-lines');
         return asRows(data);
     },
-    async createKnittingEntry(payload) {
-        const { data } = await legacyHttp.post('/knitting/entries', { ...payload, username: username() });
-        return data;
-    },
-    async linkKnittingJobCard(payload) {
-        const { data } = await legacyHttp.post('/knitting/jobcards/link', { ...payload, username: username() });
-        return data;
-    },
     async records() {
         const { data } = await legacyHttp.get('/vrecords');
         return asRows(data);

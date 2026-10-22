@@ -20,8 +20,6 @@ const schema = z.object({
     remember: z.boolean(),
 });
 const APP_NAME = 'Nathcolor+';
-const API_BASE_URL = (import.meta.env.VITE_PUBLIC_API_BASE_URL ?? '').trim();
-const USE_MOCK_API = import.meta.env.VITE_USE_MOCK_API === 'true' || API_BASE_URL === '';
 export function LoginPage() {
     const { login } = useAuth();
     const navigate = useNavigate();
@@ -34,6 +32,7 @@ export function LoginPage() {
         defaultValues: { email: remembered, password: '', remember: !!remembered },
     });
     const onSubmit = handleSubmit(async (values) => {
+        toast.dismiss(); // Dismiss a stale expired-session toast from a previous page.
         setServerError(null);
         try {
             await login(values.email, values.password, values.remember);
@@ -43,7 +42,7 @@ export function LoginPage() {
         }
         catch (e) {
             setServerError(errorMessage(e));
-            toast.error(errorMessage(e), { id: 'login-error' });
+            // The inline field-level alert is sufficient; avoid duplicate toast banners.
         }
     });
     return (<main className="flex min-h-dvh flex-col lg:flex-row">
@@ -110,9 +109,7 @@ export function LoginPage() {
             Sign in
           </Button>
 
-          {USE_MOCK_API && (<p className="rounded-md bg-accent-soft px-3 py-2 text-xs text-accent">
-              Demo mode: use <span className="font-mono font-medium">admin@example.com</span> for an admin view, and any password of at least 2 characters.
-            </p>)}
+
         </form>
       </section>
     </main>);
