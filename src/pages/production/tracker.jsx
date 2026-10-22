@@ -104,7 +104,7 @@ export default function TrackerPage() {
   }), [all]);
 
   return <div className="flex min-w-0 flex-col gap-4">
-    <PageHeader title="Dyeing Lot Timeline" description="ERP Order → Job Card → Manual Lot → recorded dyeing events. Select a row to view the full timeline." actions={
+    <PageHeader title="Order Tracker" description="ERP Order → Job Card → Manual Lot → recorded dyeing events. Select a row to view the full timeline." actions={
       <Button variant="outline" size="sm" loading={query.isFetching} onClick={() => query.refetch()}>
         <RefreshCw aria-hidden="true"/> Refresh
       </Button>
