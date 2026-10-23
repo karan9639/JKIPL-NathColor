@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { CheckCircle2, ScanLine } from 'lucide-react';
+import { CheckCircle2, ScanLine, QrCode } from 'lucide-react';
+import { JobCardQrScanner } from '@/components/production/job-card-qr-scanner';
 import { productionService } from '@/services/production.service';
 import { errorMessage } from '@/services/http/client';
 import { formatCell, formatDate, formatNumber, nowLocalDateTime, pickString } from '@/utils/format';
@@ -30,6 +31,7 @@ export default function StageEntryPage({ stage }) {
     const qc = useQueryClient();
     const inputRef = useRef(null);
     const [jobNo, setJobNo] = useState('');
+    const [scannerOpen, setScannerOpen] = useState(false);
     const [card, setCard] = useState(null);
     const [values, setValues] = useState(() => initialValues(stage));
     const [remarks, setRemarks] = useState('');
@@ -79,18 +81,23 @@ export default function StageEntryPage({ stage }) {
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="flex min-w-0 flex-col gap-5">
           <Panel>
-            <form className="flex flex-col gap-2 p-4 sm:flex-row sm:items-end" onSubmit={(e) => {
+            <form className="flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-end" onSubmit={(e) => {
             e.preventDefault();
-            if (jobNo.trim())
+            if (jobNo.trim() && !lookup.isPending) {
+                setCard(null);
                 lookup.mutate(jobNo.trim());
+            }
         }}>
-              <Field label="Job card number" htmlFor="jobcard" hint="Type or scan the job card barcode, then press Enter." className="flex-1">
+              <Field label="Job card number" htmlFor="jobcard" hint="Type a job-card number, scan with a USB barcode reader, or use the camera QR scanner." className="min-w-0 flex-[1_1_240px]">
                 <div className="relative">
                   <ScanLine className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true"/>
-                  <Input ref={inputRef} id="jobcard" autoFocus inputMode="numeric" autoComplete="off" value={jobNo} onChange={(e) => setJobNo(e.target.value)} className="tabular h-12 pl-9 text-lg"/>
+                  <Input ref={inputRef} id="jobcard" autoFocus inputMode="numeric" autoComplete="off" value={jobNo} onChange={(e) => { setJobNo(e.target.value); setCard(null); }} className="tabular h-12 pl-9 text-lg"/>
                 </div>
               </Field>
-              <Button type="submit" size="lg" disabled={!jobNo.trim()} loading={lookup.isPending} className="sm:mb-5">
+              <Button type="button" variant="outline" size="lg" disabled={lookup.isPending || submit.isPending} className="w-full sm:mb-5 sm:w-auto" onClick={() => setScannerOpen(true)}>
+                <QrCode aria-hidden="true"/> Scan QR
+              </Button>
+              <Button type="submit" size="lg" disabled={!jobNo.trim() || lookup.isPending || submit.isPending} loading={lookup.isPending} className="w-full sm:mb-5 sm:w-auto">
                 Find job card
               </Button>
             </form>
@@ -149,6 +156,16 @@ export default function StageEntryPage({ stage }) {
             </Panel>)}
         </div>
 
+        <JobCardQrScanner
+          open={scannerOpen}
+          onOpenChange={setScannerOpen}
+          onDetected={(number) => {
+            setScannerOpen(false);
+            setJobNo(number);
+            setCard(null);
+            lookup.mutate(number);
+          }}
+        />
         <Panel className="h-fit">
           <PanelHeader title="Saved this session"/>
           {recent.length ? (<ul className="divide-y divide-border">

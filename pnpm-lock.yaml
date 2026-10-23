@@ -26,6 +26,9 @@ importers:
       fflate:
         specifier: ^0.8.3
         version: 0.8.3
+      jsqr:
+        specifier: 1.4.0
+        version: 1.4.0
       lucide-react:
         specifier: ^1.16.0
         version: 1.55.0(react@18.3.1)
@@ -1463,6 +1466,9 @@ packages:
   jiti@2.7.0:
     resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
     hasBin: true
+
+  jsqr@1.4.0:
+    resolution: {tarball: https://registry.npmjs.org/jsqr/-/jsqr-1.4.0.tgz}
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
@@ -3071,6 +3077,8 @@ snapshots:
   internmap@2.0.3: {}
 
   jiti@2.7.0: {}
+
+  jsqr@1.4.0: {}
 
   js-tokens@4.0.0: {}
 
