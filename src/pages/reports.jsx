@@ -28,7 +28,7 @@ const REPORTS = {
             { key: 'JOBCARDDATE', label: 'Date', render: (r) => <span className="font-medium">{formatDate(r.JOBCARDDATE)}</span> },
             { key: 'LOTS', label: 'Lots', align: 'right' },
             { key: 'TONS', label: 'Tons', align: 'right', render: (r) => formatNumber(r.TONS) },
-            { key: 'ISSUEDBY', label: 'Issued by' },
+            // { key: 'ISSUEDBY', label: 'Issued by' },
         ],
         totals: [
             ['LOTS', 'Lots'],

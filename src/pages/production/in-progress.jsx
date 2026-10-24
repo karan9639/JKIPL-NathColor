@@ -51,7 +51,7 @@ export default function InProgressPage() {
     }, [all]);
     const rows = active ? all.filter((r) => currentStage(r) === active) : all;
     return (<>
-      <PageHeader title="Dyeing In Progress" description="Open job cards by their latest recorded stage. Refreshes every 2 minutes."/>
+      <PageHeader title="Dyeing In Progress" description="Open job cards by their latest recorded stage."/>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" role="group" aria-label="Filter by stage">
         {STAGE_ORDER.map((s) => (<button key={s} type="button" aria-pressed={active === s} onClick={() => setActive((a) => (a === s ? null : s))} className={cn('rounded-lg border px-4 py-3 text-left transition-colors', active === s ? 'border-primary bg-primary-soft' : 'border-border bg-surface hover:bg-muted')}>
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{s}</p>
