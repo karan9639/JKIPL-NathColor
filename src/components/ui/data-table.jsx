@@ -137,10 +137,10 @@ export function DataTable({ rows = [], columns, title, description, isLoading, i
           </span>
           <div className="flex flex-wrap items-center gap-2" aria-label="Records pagination">
             <label htmlFor={`${filterId}-server-size`} className="sr-only">Rows per page</label>
-            <Select id={`${filterId}-server-size`} className="h-9 w-28 text-xs" value={remoteLimit}
+            <Select id={`${filterId}-server-size`} className="h-9 w-20 text-xs" value={remoteLimit}
               disabled={paginationBusy}
               onChange={(event) => serverPagination.onPageSizeChange(Number(event.target.value))}>
-              {[25, 50, 100].map((size) => <option key={size} value={size}>{size} rows</option>)}
+              {[25, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
             </Select>
             <Button type="button" variant="outline" size="sm" disabled={paginationBusy || remoteCurrent <= 1}
               onClick={() => serverPagination.onPageChange(remoteCurrent - 1)}>Previous</Button>
@@ -154,7 +154,7 @@ export function DataTable({ rows = [], columns, title, description, isLoading, i
           <span>Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, visible.length)} of {visible.length.toLocaleString('en-IN')} rows</span>
           <div className="flex flex-wrap items-center gap-2">
             <label htmlFor={`${filterId}-size`} className="sr-only">Rows per page</label>
-            <Select id={`${filterId}-size`} className="h-9 w-24 text-xs" value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}>{[25, 50, 100].map(size => <option key={size} value={size}>{size} rows</option>)}</Select>
+            <Select id={`${filterId}-size`} className="h-9 w-20 text-xs" value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}>{[25, 50, 100].map(size => <option key={size} value={size}>{size}</option>)}</Select>
             <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Previous</Button>
             <span className="tabular">{currentPage} / {totalPages}</span>
             <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next</Button>
