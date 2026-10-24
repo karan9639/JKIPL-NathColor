@@ -240,6 +240,55 @@ function ImportPage({ def }) {
           return <li key={step} aria-current={current === index ? 'step' : undefined} className={`flex items-center gap-2 rounded-lg border px-3 py-3 ${current === index ? 'border-primary/30 bg-primary-soft font-semibold text-primary' : 'border-border bg-surface text-muted-foreground'}`}><span className="tabular">{index + 1}.</span>{step}</li>;
         })}
       </ol>
+      {/* One upload action for every ERP importer, above the file picker and long preview.
+          Keep the bar visible beneath the application header while the user scrolls. */}
+      <div className="no-print sticky top-14 z-20 rounded-xl border border-border bg-surface/95 p-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-surface/90 sm:p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0" aria-live="polite">
+            <p className="text-sm font-semibold text-foreground">
+              {result ? 'Import completed' : parsing ? 'Reading ERP file…' : rows.length ? `${rows.length.toLocaleString('en-IN')} rows ready to upload` : 'Select an ERP file to begin'}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {upload.isPending
+                ? 'Import in progress. Please keep this page open.'
+                : issues.length
+                  ? `${issues.length.toLocaleString('en-IN')} invalid row(s). Correct the source file before uploading.`
+                  : def.backend === 'yarn' && rows.length && !canUpload
+                    ? 'Check the stock-report From and To dates before uploading.'
+                    : 'Preview and validate the ERP rows before importing.'}
+            </p>
+          </div>
+          <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:items-end">
+            <Button
+              size="lg"
+              className="w-full sm:w-auto"
+              disabled={!canUpload || upload.isPending}
+              loading={upload.isPending}
+              onClick={() => upload.mutate()}
+              aria-label={`Upload ${rows.length} ERP rows`}
+            >
+              <Upload aria-hidden="true" />
+              {upload.isPending ? 'Uploading…' : `Upload ${rows.length.toLocaleString('en-IN')} rows`}
+            </Button>
+            {progress && <p className="text-xs tabular-nums text-muted-foreground" aria-live="polite">Batch {progress.done} of {progress.total}</p>}
+          </div>
+        </div>
+        {progress && progress.total > 0 && (
+          <div
+            role="progressbar"
+            aria-label="ERP import progress"
+            aria-valuemin={0}
+            aria-valuemax={progress.total}
+            aria-valuenow={progress.done}
+            className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"
+          >
+            <div
+              className="h-full rounded-full bg-primary transition-[width] duration-200"
+              style={{ width: `${Math.min(100, Math.round((progress.done / progress.total) * 100))}%` }}
+            />
+          </div>
+        )}
+      </div>
       {def.knittingFormat === 'planning' && <div className="mb-4 rounded-lg border border-border bg-surface p-4 text-sm">
         <p className="font-semibold">Unit-3 uses only the consolidated PO sheet</p>
         <p className="mt-1 text-muted-foreground">Update the same workbook and reimport it to refresh the status. The weekly machine grids, job card linking and separate completion sheets are not required.</p>
@@ -280,40 +329,9 @@ function ImportPage({ def }) {
           {issues.length > 30 && <p className="mt-2">Showing the first 30 issues.</p>}
       </div>}
       {(rows.length > 0 || parsing) && <DataTable rows={previewRows} columns={columns} isLoading={parsing} title="2. Review data" description={`${rows.length} valid row(s)${columns.length === 12 ? ' · first 12 columns' : ''}`} searchable={false}/>}
-      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-        <Button size="lg" className="w-full sm:w-auto" disabled={!canUpload || upload.isPending} loading={upload.isPending} onClick={() => upload.mutate()}><Upload aria-hidden="true"/>{`Upload ${rows.length} rows`}</Button>
-        {progress && <p className="text-sm tabular text-muted-foreground" aria-live="polite">Batch {progress.done} of {progress.total}…</p>}
-      </div>
       {result && <>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{summarize(result).map(([label, value]) => <Stat key={label} label={label} value={value}/>)}</div>
           {errorRows.length > 0 && <DataTable rows={errorRows} columns={Object.keys(errorRows[0]).map((key) => ({ key, label: key }))} title="Rejected rows" exportName="import-errors"/>}
       </>}
-      {(def.backend === 'dyeing' || def.backend === 'yarn') && <Panel>
-          <PanelHeader title="Saved imports"/>
-          <div className="flex flex-wrap items-end gap-3 p-4">
-              <Field label={def.backend === 'dyeing' ? 'Dyeing schedule date' : 'Stock report to date'} htmlFor="saved-date">
-                  <Input id="saved-date" type="date" value={savedDate} onChange={(e) => setSavedDate(e.target.value)}/>
-              </Field>
-              <Button variant="outline" loading={savedLoading} onClick={() => void loadSaved(1)}><RefreshCw aria-hidden="true"/>Load saved records</Button>
-              <p className="text-xs text-muted-foreground">Leave the date empty to fetch the most recent report. Select 25, 50, or 100 rows in the single table pagination control.</p>
-          </div>
-          {savedError && <p role="alert" className="px-4 pb-4 text-sm text-red-600">{savedError}</p>}
-          {saved && <div className="px-4 pb-4">
-              <DataTable
-                  rows={savedPreview}
-                  columns={savedColumns}
-                  title="Saved records"
-                  searchable={false}
-                  isFetching={savedLoading}
-                  serverPagination={{
-                      pagination: saved.pagination,
-                      disabled: savedLoading,
-                      onPageChange: (page) => { void loadSaved(page, savedLimit); },
-                      onPageSizeChange: (limit) => { setSavedLimit(limit); void loadSaved(1, limit); },
-                  }}
-                  exportName="saved-imports-current-page"
-              />
-          </div>}
-      </Panel>}
     </>);
 }
