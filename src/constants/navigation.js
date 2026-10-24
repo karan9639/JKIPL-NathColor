@@ -28,7 +28,9 @@ export const NAV_GROUPS = [
    {title:'Dispatch Register',path:'/imports/dispatch',icon:Truck,allowedRoles:['billing']},
    {title:'Recipes',path:'/imports/recipes',icon:Beaker,allowedRoles:['recipe']},
  ]},
- {label:'Tools',items:[{title:'GSM Calculator',path:'/tools/gsm',icon:Calculator},{title:'QR Labels',path:'/tools/qr',icon:QrCode},{title:'Fabric Name Mapping',path:'/tools/fabric-mapping',icon:MapPinned,allowedRoles:['unit2','unit3']},{title:'Refresh Data',path:'/tools/refresh-cache',icon:RefreshCw,allowedRoles:['admin']}]},
+ {label:'Tools',items:[{title:'GSM Calculator',path:'/tools/gsm',icon:Calculator},{title:'QR Labels',path:'/tools/qr',icon:QrCode},
+  // {title:'Fabric Name Mapping',path:'/tools/fabric-mapping',icon:MapPinned,allowedRoles:['unit2','unit3']},
+ {title:'Refresh Data',path:'/tools/refresh-cache',icon:RefreshCw}]},
 ];
 export const ALL_NAV_ITEMS=NAV_GROUPS.flatMap(g=>g.items.map(item=>({...item,group:g.label})));
 export { canAccess } from '@/constants/permissions';
