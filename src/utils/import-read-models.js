@@ -16,6 +16,7 @@ export function readImportPage(response, collectionKey, requestedPage = 1, limit
     const totalPages = Math.max(1, Number(meta.totalPages ?? Math.ceil(totalEntries / pageSize)) || 1);
     return {
         rows: records,
+        summary: payload.summary ?? null,
         pagination: {
             totalEntries, totalPages, currentPage: page, limit: pageSize,
             hasPrevPage: Boolean(meta.hasPrevPage ?? page > 1),
@@ -37,6 +38,7 @@ export function isEmptyImportReport(error, resource) {
 export function emptyImportPage(page = 1, limit = 100) {
     return {
         rows: [],
+        summary: null,
         pagination: {
             totalEntries: 0, totalPages: 1, currentPage: page, limit,
             hasNextPage: false, hasPrevPage: false,

@@ -1,278 +1,161 @@
-import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, ClipboardList, RefreshCcw } from 'lucide-react';
-
-import { ordersService } from '@/services/orders.service';
+import { ArrowLeft, ChevronRight, RefreshCcw } from 'lucide-react';
 import { http, errorMessage } from '@/services/http/client';
-import { PageHeader, Panel, PanelHeader, ErrorState, EmptyState, Stat, Badge } from '@/components/ui/panel';
+import { PageHeader, Panel, PanelHeader, ErrorState, EmptyState } from '@/components/ui/panel';
+import { Dialog } from '@/components/ui/dialog';
 import { Field, Input } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
-import { formatCell, formatDate, formatNumber, pickString } from '@/utils/format';
+import { formatNumber } from '@/utils/format';
+import { formatErpOpening } from '@/utils/lot-timeline';
 import {
-  normalizedLotRows,
-  orderTrackerStatus,
-  trackerSummaryValue,
-  uniqueOrderUnits,
-} from '@/utils/order-tracker-presentation';
+  ORDER_TRACKER_STAGES, getOrderLotEvents, orderLotStatus,
+  orderTrackingState, readTrackerOrderId,
+} from '@/utils/order-tracker';
 
-const STAGES = [
-  { key: 'dyes', name: 'Dyes & Chemicals' },
-  { key: 'jet', name: 'Jet Loading' },
-  { key: 'rope', name: 'Rope Opener' },
-  { key: 'heat', name: 'Heat Setting' },
-  { key: 'finish', name: 'Finishing' },
-];
+const statusStyle = {
+  Closed: 'border-green-300 bg-green-50 text-green-800',
+  'In production': 'border-primary/30 bg-primary-soft text-primary',
+  Open: 'border-border bg-muted text-foreground',
+};
 
-function OrderFacts({ orders }) {
-  if (!orders.length) return null;
-
-  const first = orders[0];
-  const facts = [
-    ['Customer', pickString(first, 'customerName', 'CUSTOMERNAME')],
-    ['Fabric / Item', pickString(first, 'itemName', 'upperFabricName')],
-    ['Colour', pickString(first, 'upperColor', 'color')],
-    ['Customer PO', pickString(first, 'refPO')],
+function LotDetails({ lot }) {
+  const events = useMemo(() => getOrderLotEvents(lot), [lot]);
+  const recorded = new Set((lot.events || []).map(event => event.stage));
+  const fields = [
+    ['ERP Order ID', lot.orderId], ['Job card', lot.jobCardNo],
+    ['Manual lot', lot.manualLotNo], ['Fabric', lot.itemName],
+    ['Customer', lot.customerName], ['Colour', lot.color],
+    ['Allocated KG', lot.kgs == null ? 'Not imported' : `${formatNumber(lot.kgs, 3)} KG`],
+    ['ERP job-card status', lot.erpStatus],
   ];
-
-  return (
-    <Panel>
-      <PanelHeader title="Customer order" description="Imported ERP Order Book data (independent of job-card availability)" />
-      <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
-        {facts.map(([label, value]) => (
-          <div className="min-w-0" key={label}>
-            <p className="text-xs text-muted-foreground">{label}</p>
-            <p className="mt-1 break-words text-sm font-medium">{value || '—'}</p>
-          </div>
-        ))}
-      </div>
-      <div className="min-w-0 overflow-x-auto border-t border-border">
-        <table className="w-full min-w-[560px] text-left text-sm">
-          <thead className="bg-muted text-xs text-muted-foreground">
-            <tr><th className="px-4 py-2">Order ID</th><th className="px-4 py-2">Item</th><th className="px-4 py-2 text-right">Ordered quantity</th><th className="px-4 py-2">Delivery</th></tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {orders.map((row, index) => (
-              <tr key={row._id || `${row.orderId}-${index}`}>
-                <td className="px-4 py-2 font-medium">{formatCell(row.orderId)}</td>
-                <td className="px-4 py-2">{formatCell(row.itemName || row.upperFabricName)}</td>
-                <td className="whitespace-nowrap px-4 py-2 text-right tabular-nums">{formatNumber(row.quantity)} {formatCell(row.uom)}</td>
-                <td className="whitespace-nowrap px-4 py-2">{row.deliveryDate ? formatDate(row.deliveryDate) : '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Panel>
-  );
-}
-
-function LotRecords({ lots, trackingUnavailable }) {
-  return (
-    <Panel>
-      <PanelHeader
-        title="ERP Job Cards / Lots"
-        description={`${lots.length} imported allocation line(s). One job card may cover multiple order IDs.`}
-      />
-      {lots.length === 0 ? (
-        <div className="p-4 sm:p-5">
-          <p className="font-medium">No open job card imported for this order yet.</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Order tracking remains available. This does not confirm that greige stock is insufficient
-            or that no work has happened outside the imported ERP records.
-          </p>
-        </div>
-      ) : (
-        <div className="divide-y divide-border">
-          {lots.map((lot, index) => (
-            <div key={`${lot.jobCardNo}-${lot.manualLotNo}-${index}`} className="space-y-3 p-4 sm:p-5">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <p className="font-semibold">Job Card {lot.jobCardNo || '—'}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Manual Lot: {lot.manualLotNo || 'Not supplied'}
-                    {' · '}{formatNumber(lot.kgs)} KG allocated
-                  </p>
-                </div>
-                <Badge tone={lot.status === 'closed' ? 'success' : 'neutral'}>
-                  {lot.status === 'closed' ? 'Closed' : lot.status === 'in-production' ? 'In production' : lot.status === 'open' ? 'Open' : 'Status unavailable'}
-                </Badge>
-              </div>
-              {trackingUnavailable || lot.stageUnavailable ? (
-                <p className="text-xs text-muted-foreground">Production-stage details currently unavailable.</p>
-              ) : (
-                <ol className="flex flex-wrap gap-2" aria-label="Recorded production stages">
-                  {STAGES.map(({ key, name }) => {
-                    const event = lot.events?.find((entry) => entry.stage === key);
-                    return (
-                      <li key={key} title={event?.eventDate ? formatDate(event.eventDate, true) : 'No event imported'}
-                        className={`rounded-md border px-2.5 py-1.5 text-xs ${event ? 'border-green-300 bg-green-50 text-green-900' : 'border-border text-muted-foreground'}`}>
-                        {name}: {event ? 'Recorded' : 'Not recorded'}
-                      </li>
-                    );
-                  })}
-                </ol>
-              )}
-              {lot.closedAt && <p className="text-xs text-muted-foreground">Closed: {formatDate(lot.closedAt, true)}</p>}
-            </div>
-          ))}
-        </div>
-      )}
-    </Panel>
-  );
+  return <div className="space-y-5">
+    <dl className="grid grid-cols-1 gap-3 rounded-md bg-muted/50 p-3 sm:grid-cols-2">
+      {fields.map(([label, value]) => <div className="min-w-0" key={label}>
+        <dt className="text-xs text-muted-foreground">{label}</dt>
+        <dd className="break-words text-sm font-medium">{value === '' || value == null ? '—' : value}</dd>
+      </div>)}
+    </dl>
+    <section aria-label="Recorded timeline">
+      <h3 className="mb-3 text-sm font-semibold">Recorded ERP / production timeline</h3>
+      {events.length ? <ol className="ml-2 border-l-2 border-border pl-5">
+        {events.map(event => <li key={event.id} className="relative pb-5 last:pb-0">
+          <span aria-hidden="true" className="absolute -left-[27px] top-1.5 size-3 rounded-full border-2 border-primary bg-surface"/>
+          <p className="text-sm font-medium">{event.label}</p>
+          <p className="text-xs text-muted-foreground">{event.display}</p>
+          {event.machine && <p className="text-xs text-muted-foreground">Machine: {event.machine}</p>}
+          {event.remarks && <p className="text-xs text-muted-foreground">{event.remarks}</p>}
+        </li>)}
+      </ol> : <p className="text-sm text-muted-foreground">No dated production activity has been imported for this lot.</p>}
+    </section>
+    <div className="border-t border-border pt-3">
+      <p className="mb-2 text-xs font-medium text-muted-foreground">No production record available for</p>
+      <div className="flex flex-wrap gap-2">{ORDER_TRACKER_STAGES.filter(stage => !recorded.has(stage.key)).map(stage =>
+        <span key={stage.key} className="rounded-md border px-2 py-1 text-xs text-muted-foreground">{stage.label}</span>
+      )}</div>
+    </div>
+    <p className="text-xs leading-relaxed text-muted-foreground">Stage events are stored against the job-card number and may also appear under other ERP orders sharing the same job card. No missing step is assumed complete.</p>
+  </div>;
 }
 
 export default function OrderTrackerPage() {
   const [params, setParams] = useSearchParams();
-  const orderId = String(params.get('orderId') || '').trim();
+  const orderId = readTrackerOrderId(params);
   const [draft, setDraft] = useState(orderId);
+  const [selectedKey, setSelectedKey] = useState(null);
 
-  useEffect(() => { setDraft(orderId); }, [orderId]);
+  useEffect(() => { setDraft(orderId); setSelectedKey(null); }, [orderId]);
 
-  // Read the order summary independently: it still exists when no job card exists.
-  const summaryQuery = useQuery({
-    queryKey: ['order-summary', orderId],
-    enabled: Boolean(orderId),
-    queryFn: () => ordersService.fetchOrderSummary(orderId),
-    staleTime: 30_000,
-    retry: 1,
-  });
-
-  // Stage events can be missing; the order summary must still be displayed.
-  const trackerQuery = useQuery({
+  const query = useQuery({
     queryKey: ['order-tracker', orderId],
     enabled: Boolean(orderId),
     queryFn: async () => {
       const response = await http.get(`/orders/${encodeURIComponent(orderId)}/tracker`);
       return response.data?.data ?? response.data;
     },
-    staleTime: 30_000,
     retry: 1,
+    staleTime: 30_000,
   });
 
-  const summary = summaryQuery.data;
-  const tracking = trackerQuery.data;
-  const orders = summary?.orders ?? tracking?.orders ?? [];
-  const schedules = summary?.schedules ?? tracking?.schedules ?? [];
-  const lots = normalizedLotRows(tracking, summary, trackerQuery.isError);
-  const status = orderTrackerStatus({ orders, schedules, lots });
-  const hasData = Boolean(summary || tracking);
-  const loading = Boolean(orderId) && !hasData && (summaryQuery.isPending || trackerQuery.isPending);
-  const notFound = Boolean(orderId) && !loading && !hasData && summaryQuery.isError && trackerQuery.isError;
-  const requiredKg = trackerSummaryValue(tracking?.summary?.scheduledKgs, summary?.summary?.scheduledKg);
-  const allocatedKg = trackerSummaryValue(tracking?.summary?.jobCardedKgs, summary?.summary?.jobCardAllocatedKg);
-  const remainingKg = trackerSummaryValue(tracking?.summary?.balanceKgs, summary?.summary?.scheduleRemainderKg);
-  const units = uniqueOrderUnits(orders);
-
+  const info = query.data;
+  const lots = info?.lots ?? [];
+  const selected = lots.find((lot, index) => (lot.recordKey || `${lot.jobCardNo}:${lot.manualLotNo}:${index}`) === selectedKey) ?? null;
   const submit = (event) => {
     event.preventDefault();
-    const nextId = draft.trim();
-    if (!nextId) return;
-    if (nextId === orderId) {
-      void summaryQuery.refetch();
-      void trackerQuery.refetch();
-    } else {
-      setParams({ orderId: nextId });
-    }
+    const id = draft.trim();
+    if (id) setParams({ orderId: id });
   };
 
-  return (
-    <div className="min-w-0 space-y-4 pb-6">
-      <PageHeader title="Order-wise Production Tracker" description="Track any ERP Order ID, with or without a dyeing job card." />
-
+  return <div className="flex min-w-0 flex-col gap-4">
+    <PageHeader title="Order-wise Production Tracker" description="Search a specific ERP Order ID to see its own dyeing schedules, job-card allocations and recorded lot activities." actions={
+      <Button variant="outline" size="sm" disabled={!orderId} loading={query.isFetching} onClick={() => void query.refetch()}><RefreshCcw/> Refresh</Button>
+    }/>
+    <Panel>
+      <form className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end" onSubmit={submit}>
+        <Field label="ERP Order ID" htmlFor="track-order" className="min-w-0 flex-1">
+          <Input id="track-order" value={draft} onChange={event => setDraft(event.target.value)} placeholder="e.g. 189904" autoComplete="off"/>
+        </Field>
+        <Button type="submit" disabled={!draft.trim()}>Track order</Button>
+      </form>
+    </Panel>
+    {!orderId && <EmptyState title="Enter an ERP Order ID" description="Or open an order in All Orders and choose View this order / lot tracker."/>}
+    {orderId && query.isPending && <Panel><p className="p-4 text-sm text-muted-foreground" role="status">Loading imported order, schedules and lot events…</p></Panel>}
+    {query.isError && <ErrorState message={errorMessage(query.error)} onRetry={() => void query.refetch()}/>}
+    {info && <>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[
+          ['ERP order lines', info.orders?.length ?? 0],
+          ['Scheduled KG', info.schedules?.length ? `${formatNumber(info.summary?.scheduledKgs, 3)} KG` : '—'],
+          ['Job-carded KG', lots.length ? `${formatNumber(info.summary?.jobCardedKgs, 3)} KG` : '—'],
+          ['Schedule balance KG', info.schedules?.length ? `${formatNumber(info.summary?.balanceKgs, 3)} KG` : '—'],
+        ].map(([label,value]) => <Panel key={label}><div className="p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 break-words text-lg font-semibold tabular-nums">{value}</p></div></Panel>)}
+      </div>
+      <Panel><div className="flex flex-wrap items-center justify-between gap-2 p-4">
+        <div><h2 className="font-semibold">ERP Order {info.orderId}</h2><p className="text-sm text-muted-foreground">{orderTrackingState(info)}</p></div>
+        <Link className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted" to="/orders/all"><ArrowLeft className="size-4"/> All Orders</Link>
+      </div></Panel>
+      {(info.summary?.overAllocatedKgs > 0 || info.summary?.balanceKgs < 0) && <div role="alert" className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+        ERP reconciliation required: imported job-card allocations exceed the unique scheduled quantity by {formatNumber(info.summary?.overAllocatedKgs || -info.summary?.balanceKgs, 3)} KG. Check the ERP schedule revision/allocation.
+      </div>}
+      {info.orders?.some(order => !['KGS','KG'].includes(String(order.uom ?? '').toUpperCase())) && <p className="rounded-md border border-border bg-surface p-3 text-sm text-muted-foreground">
+        Order-book UOM: {[...new Set(info.orders.map(order => order.uom || 'UNSPECIFIED'))].join(', ')}. Dyeing schedules and job-card allocations are expressed in KG. No automatic unit conversion has been applied.
+      </p>}
       <Panel>
-        <form onSubmit={submit} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
-          <Field label="ERP Order ID" htmlFor="track-order" className="min-w-0 flex-1">
-            <Input id="track-order" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="e.g. 193044" />
-          </Field>
-          <Button type="submit" disabled={!draft.trim()} className="sm:shrink-0">
-            Track order <ArrowRight className="ml-2 size-4" aria-hidden="true" />
-          </Button>
-          {orderId && (
-            <Button type="button" variant="outline" onClick={() => {
-              void summaryQuery.refetch(); void trackerQuery.refetch();
-            }} aria-label="Refresh order tracker">
-              <RefreshCcw className="mr-2 size-4" aria-hidden="true" /> Refresh
-            </Button>
-          )}
-        </form>
-      </Panel>
-
-      {!orderId && <EmptyState title="Enter an ERP Order ID" description="Orders can be tracked before dyeing schedules or job cards are imported." />}
-      {loading && <Panel><div className="p-5 text-sm text-muted-foreground" role="status">Loading ERP order records…</div></Panel>}
-      {notFound && <ErrorState message={errorMessage(summaryQuery.error || trackerQuery.error)} onRetry={() => {
-        void summaryQuery.refetch(); void trackerQuery.refetch();
-      }} />}
-
-      {hasData && (
-        <>
-          <Panel className="p-4 sm:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <ClipboardList className="size-5 text-primary" aria-hidden="true" />
-                <div>
-                  <h2 className="font-semibold">ERP Order {orderId}</h2>
-                  <p className="text-sm text-muted-foreground">{status}</p>
+        <PanelHeader title={`Order ${info.orderId} — job cards and lots`} description={`${lots.length} imported job-card allocation line(s) for this order. Select a lot to view its recorded timeline.`}/>
+        {!lots.length ? <div className="p-5 text-sm text-muted-foreground">
+          <p className="font-medium text-foreground">No Open Job Card imported for ERP Order {info.orderId}.</p>
+          <p className="mt-1">{info.schedules?.length ? 'A dyeing schedule is present, but no matching job-card allocation was imported.' : 'No matching dyeing schedule or job-card allocation is imported yet.'} This does not prove stock shortage or production inactivity.</p>
+        </div> : <div className="divide-y divide-border">
+          {lots.map((lot, index) => {
+            const key = lot.recordKey || `${lot.jobCardNo}:${lot.manualLotNo}:${index}`;
+            const stages = new Set((lot.events ?? []).map(event => event.stage));
+            const status = orderLotStatus(lot);
+            const opened = formatErpOpening({ JOBCARDDATE: lot.jobCardDate, JOBCARDTIME: lot.jobCardTime });
+            return <button type="button" key={key} onClick={() => setSelectedKey(key)}
+              className="block w-full p-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+              aria-label={`View recorded timeline for Job Card ${lot.jobCardNo}, Lot ${lot.manualLotNo || 'not supplied'}`}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0"><p className="font-semibold text-primary">Job Card {lot.jobCardNo}</p>
+                  <p className="text-sm">Lot {lot.manualLotNo || 'Not supplied'} · {lot.kgs == null ? 'KG not imported' : `${formatNumber(lot.kgs, 3)} KG`}</p>
+                  {lot.itemName && <p className="mt-1 text-sm text-muted-foreground">{lot.itemName}</p>}
+                  {opened !== '—' && <p className="mt-1 text-xs text-muted-foreground">Opened: {opened}</p>}
                 </div>
+                <div className="flex items-center gap-2"><span className={`rounded-md border px-2 py-1 text-xs font-medium ${statusStyle[status] || statusStyle.Open}`}>{status}</span><ChevronRight className="size-4 text-muted-foreground"/></div>
               </div>
-              <Badge tone="primary">{lots.length} job-card allocation(s)</Badge>
-            </div>
-          </Panel>
-
-          {(summaryQuery.isError || trackerQuery.isError) && (
-            <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950" role="status">
-              Some linked ERP details are temporarily unavailable. Available imported information is displayed below; missing records are not treated as zero or completed.
-            </p>
-          )}
-
-          <OrderFacts orders={orders} />
-
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-            <Stat label="Order book lines" value={String(orders.length)} tone="primary" />
-            <Stat label="Scheduled KG" value={formatNumber(requiredKg)} />
-            <Stat label="Job-carded KG" value={formatNumber(allocatedKg)} />
-            <Stat label="Schedule remainder KG" value={formatNumber(remainingKg)} />
-          </div>
-
-          {units.length > 0 && (
-            <p className="rounded-md border border-border bg-surface p-3 text-sm text-muted-foreground">
-              Order-book UOM: {units.join(', ')}. Dyeing schedule and job-card allocation quantities are in KG. No automatic unit conversion is applied.
-            </p>
-          )}
-
-          {requiredKg != null && allocatedKg != null && allocatedKg > requiredKg && (
-            <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950" role="alert">
-              ERP reconciliation required: job-card allocation exceeds scheduled KG by {formatNumber(allocatedKg - requiredKg, 3)} KG.
-            </p>
-          )}
-
-          <Panel>
-            <PanelHeader title="Dyeing Schedules" description={`${schedules.length} imported schedule row(s)`} />
-            {!schedules.length ? (
-              <p className="p-4 text-sm text-muted-foreground">No dyeing schedule imported for this order yet. The customer order remains trackable.</p>
-            ) : (
-              <div className="min-w-0 overflow-x-auto">
-                <table className="w-full min-w-[500px] text-left text-sm">
-                  <thead className="bg-muted text-xs"><tr><th className="px-4 py-2">Schedule</th><th className="px-4 py-2">Fabric</th><th className="px-4 py-2 text-right">Scheduled KG</th><th className="px-4 py-2">Job Card</th></tr></thead>
-                  <tbody className="divide-y divide-border">{schedules.map((row, index) => (
-                    <tr key={row._id || index}><td className="px-4 py-2">{formatCell(row.dyeingScheduleNo)}</td><td className="px-4 py-2">{formatCell(row.itemName)}</td><td className="px-4 py-2 text-right">{formatNumber(row.quantityKgs)}</td><td className="px-4 py-2">{formatCell(row.jobCardNo)}</td></tr>
-                  ))}</tbody>
-                </table>
-              </div>
-            )}
-          </Panel>
-
-          <LotRecords lots={lots} trackingUnavailable={trackerQuery.isError} />
-
-          <Panel>
-            <PanelHeader title="ERP Data Notes" />
-            <p className="p-4 text-sm text-muted-foreground">
-              Greige stock readiness and dispatch balance are not automatically verified.
-              An imported Job Card is not proof of completed production. Unit-3 stock may use an ERP Unit-1 header; no unverified KG/MTR/PRS conversions are applied.
-            </p>
-          </Panel>
-        </>
-      )}
-    </div>
-  );
+              <div className="mt-3 flex flex-wrap gap-1.5">{ORDER_TRACKER_STAGES.map(stage => <span key={stage.key}
+                className={`rounded border px-2 py-1 text-xs ${stages.has(stage.key) ? 'border-green-300 bg-green-50 text-green-900' : 'border-border text-muted-foreground'}`}
+                title={stages.has(stage.key) ? `${stage.label}: recorded` : `${stage.label}: no record`}>{stage.short} {stages.has(stage.key) ? '✓' : '—'}</span>)}</div>
+              <p className="mt-2 text-xs font-medium text-primary">View recorded lot timeline →</p>
+            </button>;
+          })}
+        </div>}
+      </Panel>
+      <Panel><PanelHeader title="ERP data notes"/><p className="p-4 text-sm text-muted-foreground">Greige stock readiness: {info.stockReadiness || 'not verified'}. Job-card events are recorded against their job-card number and can appear on more than one ERP order allocation line. Dispatch import entries for this order: {info.dispatches?.length ?? 0}. No unverified production quantities or automatic KG/MTR conversions are assumed.</p></Panel>
+    </>}
+    <Dialog open={Boolean(selected)} onOpenChange={open => { if (!open) setSelectedKey(null); }}
+      title={`Job Card ${selected?.jobCardNo || '—'}`} description={`Lot ${selected?.manualLotNo || '—'} · ERP Order ${orderId}`} className="max-w-2xl">
+      {selected && <LotDetails lot={selected}/>} 
+    </Dialog>
+  </div>;
 }

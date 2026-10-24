@@ -13,6 +13,7 @@ export function readJobCardLotsPage(payload, requestedPage = 1) {
   const totalPages = Math.max(1, Number(meta.totalPages) || Math.ceil(totalEntries / limit));
   return {
     rows: payload.jobCards,
+    summary: payload.summary ?? null,
     pagination: {
       totalEntries, totalPages, currentPage: page, limit,
       hasPrevPage: Boolean(meta.hasPrevPage ?? page > 1),

@@ -8,12 +8,13 @@ import { fetchImportPage } from './import-report.service';
  */
 export const dyeingService = {
     // Used by the Dyeing Programs page; returns { rows, pagination } like yarnStock().
-    dyeingPrograms(params = {}) {
+    dyeingPrograms(params = {}, signal) {
         return fetchImportPage(
             '/dyeing/fetch-dyeingprogram',
             'dyeingPrograms',
             'dyeing',
-            params
+            params,
+            signal
         );
     },
 

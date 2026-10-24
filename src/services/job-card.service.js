@@ -249,7 +249,7 @@ export const jobCardService = {
      * Fetch job cards.
      * GET /api/v1/jobcard/fetch-jobcard
      */
-    async fetchJobCards(params = {}) {
+    async fetchJobCards(params = {}, signal) {
         const { data } = await http.get(
             '/jobcard/fetch-jobcard',
             {
@@ -258,6 +258,7 @@ export const jobCardService = {
                     limit: 100,
                     ...params,
                 },
+                signal,
             }
         );
 

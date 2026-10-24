@@ -3,8 +3,8 @@ import { fetchImportPage } from './import-report.service';
 
 /** Verified yarn stock endpoints and payloads from the supplied Express backend. */
 export const yarnService = {
-    yarnStock(params = {}) {
-        return fetchImportPage('/yarn/fetch-yarnstock', 'yarnStocks', 'yarn', params);
+    yarnStock(params = {}, signal) {
+        return fetchImportPage('/yarn/fetch-yarnstock', 'yarnStocks', 'yarn', params, signal);
     },
     async createImportedYarnStock(yarnStocks, reportPeriod) {
         const { data } = await http.post('/yarn/create-yarnstock', { yarnStocks, reportPeriod });

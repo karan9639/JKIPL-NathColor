@@ -7,7 +7,7 @@ import { importQueryParams } from '@/utils/import-read-models';
 const INITIAL = { mode: 'latest', date: '', fromDate: '', toDate: '', search: '' };
 
 /** Shared, responsive date/search controls for the existing import-backed views. */
-export function ImportReportFilters({ kind, onApply, onRefresh, loading = false }) {
+export function ImportReportFilters({ kind, onApply, onRefresh, loading = false, pageSize = 50 }) {
     const [draft, setDraft] = useState(INITIAL);
     const [validation, setValidation] = useState('');
     const change = (name, value) => { setValidation(''); setDraft((d) => ({ ...d, [name]: value })); };
@@ -19,9 +19,9 @@ export function ImportReportFilters({ kind, onApply, onRefresh, loading = false 
         if (draft.mode === 'range' && (!draft.fromDate || !draft.toDate || draft.fromDate > draft.toDate)) {
             setValidation('Select a valid start and end date.'); return;
         }
-        onApply(importQueryParams({ ...draft, page: 1, limit: 100 }));
+        onApply(importQueryParams({ ...draft, page: 1, limit: pageSize }));
     };
-    const reset = () => { setDraft(INITIAL); setValidation(''); onApply({ page: 1, limit: 100 }); };
+    const reset = () => { setDraft(INITIAL); setValidation(''); onApply({ page: 1, limit: pageSize }); };
     return <form onSubmit={apply} className="rounded-lg border border-border bg-surface p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
         <Field label="Report period" htmlFor={`${kind}-date-mode`} className="w-full sm:w-52">
@@ -42,8 +42,8 @@ export function ImportReportFilters({ kind, onApply, onRefresh, loading = false 
             <Input id={`${kind}-to`} type="date" min={draft.fromDate || undefined} value={draft.toDate} onChange={(e) => change('toDate', e.target.value)}/>
           </Field>
         </>}
-        {kind === 'dyeing' && <Field label="Search schedules" htmlFor="dyeing-remote-search" className="min-w-0 flex-1 sm:min-w-56">
-          <Input id="dyeing-remote-search" value={draft.search} onChange={(e) => change('search', e.target.value)} placeholder="Order, customer, fabric, colour…"/>
+        {(kind === 'dyeing' || kind === 'yarn') && <Field label="Search schedules" htmlFor={`${kind}-remote-search`} className="min-w-0 flex-1 sm:min-w-56">
+          <Input id={`${kind}-remote-search`} value={draft.search} onChange={(e) => change('search', e.target.value)} placeholder={kind === 'yarn' ? 'Search yarn name, item code, colour…' : 'Order, customer, fabric, colour…'}/>
         </Field>}
         <div className="flex flex-wrap gap-2">
           <Button type="submit" disabled={loading}><Search aria-hidden="true"/> Apply</Button>
@@ -53,18 +53,4 @@ export function ImportReportFilters({ kind, onApply, onRefresh, loading = false 
       </div>
       {validation && <p role="alert" className="mt-2 text-sm text-danger">{validation}</p>}
     </form>;
-}
-
-export function ImportReportPagination({ pagination, onPageChange, disabled = false }) {
-    if (!pagination || pagination.totalEntries === 0) return null;
-    const start = (pagination.currentPage - 1) * pagination.limit + 1;
-    const end = Math.min(pagination.totalEntries, start + pagination.limit - 1);
-    return <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-muted-foreground">Showing <strong className="text-foreground">{start}–{end}</strong> of <strong className="text-foreground">{pagination.totalEntries.toLocaleString('en-IN')}</strong> records</p>
-      <div className="flex flex-wrap items-center gap-2" aria-label="Report pagination">
-        <Button type="button" size="sm" variant="outline" disabled={disabled || !pagination.hasPrevPage} onClick={() => onPageChange(pagination.currentPage - 1)}>Previous</Button>
-        <span className="tabular whitespace-nowrap">Page {pagination.currentPage} / {pagination.totalPages}</span>
-        <Button type="button" size="sm" variant="outline" disabled={disabled || !pagination.hasNextPage} onClick={() => onPageChange(pagination.currentPage + 1)}>Next</Button>
-      </div>
-    </div>;
 }

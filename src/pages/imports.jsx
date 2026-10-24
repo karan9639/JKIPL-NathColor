@@ -46,7 +46,7 @@ function ImportPage({ def }) {
     const [savedError, setSavedError] = useState('');
     const [savedLoading, setSavedLoading] = useState(false);
     const [savedDate, setSavedDate] = useState('');
-    const [savedPage, setSavedPage] = useState(1);
+    const [savedLimit, setSavedLimit] = useState(50);
 
     const finishParse = (sourceRows) => {
         const { rows: clean, errors, duplicateRows: repeated = 0 } = normalizeRecords(def, sourceRows);
@@ -205,20 +205,20 @@ function ImportPage({ def }) {
         onError: (e) => { setUploadError({ status: e.status, code: e.code, message: errorMessage(e) }); },
         onSettled: () => setProgress(null),
     });
-    const loadSaved = async (page = 1) => {
+    const loadSaved = async (page = 1, limit = savedLimit) => {
         setSavedError('');
         setSavedLoading(true);
         try {
-            const params = { page, ...(savedDate ? { date: savedDate } : {}) };
+            const params = { page, limit, ...(savedDate ? { date: savedDate } : {}) };
             const data = def.backend === 'dyeing' ? await dyeingService.fetchImportedDyeingPrograms(params) : await yarnService.fetchImportedYarnStock(params);
             setSaved(data);
-            setSavedPage(page);
         } catch (error) {
             setSaved(null);
             setSavedError(error.status === 404 ? 'No imports found for this date.' : errorMessage(error));
         } finally { setSavedLoading(false); }
     };
-    const previewRows = rows.slice(0, 100).map(flattenForPreview);
+    // Preview the entire parsed file through one local DataTable pager, not a 100-row sample.
+    const previewRows = rows.map(flattenForPreview);
     const orderedPreviewKeys = def.backend === 'greige-u3' ? [
         'itemName', 'uom', 'closing.qtyKgs', 'closing.qty', 'receipt.qtyKgs', 'issue.qtyKgs',
         'lastReceived.date', 'lastReceived.qtyKgs', 'lastIssue.date', 'lastIssue.qtyKgs',
@@ -279,7 +279,7 @@ function ImportPage({ def }) {
           <ul className="mt-2 max-h-40 list-disc space-y-1 overflow-auto pl-5">{issues.slice(0, 30).map((issue, index) => <li key={index}>{issue}</li>)}</ul>
           {issues.length > 30 && <p className="mt-2">Showing the first 30 issues.</p>}
       </div>}
-      {(rows.length > 0 || parsing) && <DataTable rows={previewRows} columns={columns} isLoading={parsing} title="2. Review data" description={`${rows.length} valid row(s)${rows.length > 100 ? ' · previewing first 100' : ''}${columns.length === 12 ? ' · first 12 columns' : ''}`} searchable={false}/>}
+      {(rows.length > 0 || parsing) && <DataTable rows={previewRows} columns={columns} isLoading={parsing} title="2. Review data" description={`${rows.length} valid row(s)${columns.length === 12 ? ' · first 12 columns' : ''}`} searchable={false}/>}
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
         <Button size="lg" className="w-full sm:w-auto" disabled={!canUpload || upload.isPending} loading={upload.isPending} onClick={() => upload.mutate()}><Upload aria-hidden="true"/>{`Upload ${rows.length} rows`}</Button>
         {progress && <p className="text-sm tabular text-muted-foreground" aria-live="polite">Batch {progress.done} of {progress.total}…</p>}
@@ -295,16 +295,24 @@ function ImportPage({ def }) {
                   <Input id="saved-date" type="date" value={savedDate} onChange={(e) => setSavedDate(e.target.value)}/>
               </Field>
               <Button variant="outline" loading={savedLoading} onClick={() => void loadSaved(1)}><RefreshCw aria-hidden="true"/>Load saved records</Button>
-              <p className="text-xs text-muted-foreground">Leave the date empty to fetch the most recent report. 100 records per page.</p>
+              <p className="text-xs text-muted-foreground">Leave the date empty to fetch the most recent report. Select 25, 50, or 100 rows in the single table pagination control.</p>
           </div>
           {savedError && <p role="alert" className="px-4 pb-4 text-sm text-red-600">{savedError}</p>}
           {saved && <div className="px-4 pb-4">
-              <DataTable rows={savedPreview} columns={savedColumns} title={`Saved records (${saved.pagination?.totalEntries ?? savedRows.length})`} searchable={false}/>
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                  <Button size="sm" variant="outline" disabled={savedLoading || !saved.pagination?.hasPrevPage} onClick={() => void loadSaved(savedPage - 1)}>Previous</Button>
-                  <span className="text-xs text-muted-foreground">Page {savedPage} of {saved.pagination?.totalPages ?? 1}</span>
-                  <Button size="sm" variant="outline" disabled={savedLoading || !saved.pagination?.hasNextPage} onClick={() => void loadSaved(savedPage + 1)}>Next</Button>
-              </div>
+              <DataTable
+                  rows={savedPreview}
+                  columns={savedColumns}
+                  title="Saved records"
+                  searchable={false}
+                  isFetching={savedLoading}
+                  serverPagination={{
+                      pagination: saved.pagination,
+                      disabled: savedLoading,
+                      onPageChange: (page) => { void loadSaved(page, savedLimit); },
+                      onPageSizeChange: (limit) => { setSavedLimit(limit); void loadSaved(1, limit); },
+                  }}
+                  exportName="saved-imports-current-page"
+              />
           </div>}
       </Panel>}
     </>);

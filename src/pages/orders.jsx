@@ -1,15 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Search, X } from 'lucide-react';
 import { ordersService } from '@/services/orders.service';
 import { errorMessage } from '@/services/http/client';
-import { formatCell, formatDate, formatNumber, pickString, toNumber } from '@/utils/format';
+import { retryReadOnce } from '@/services/http/retry';
+import { formatCell, formatDate, formatNumber, pickString } from '@/utils/format';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/field';
 import { DataTable } from '@/components/ui/data-table';
 import { PageHeader, Stat } from '@/components/ui/panel';
 import { OrderDetailDialog } from '@/components/orders/order-detail-dialog';
-import { ImportReportPagination } from '@/components/reports/import-report-filters';
 const TITLES = {
     SearchOrdersPageKey: { title: 'All Orders', description: 'Search the full order book by order number, customer, fabric, color or PO.' },
     DomesticPendingOrdersPageKey: { title: 'Domestic Pending Orders', description: 'Domestic orders with balance quantity yet to dispatch.' },
@@ -46,6 +46,8 @@ export default function OrdersPage({ menuKey }) {
     const [search, setSearch] = useState('');
     const [selected, setSelected] = useState(null);
     const [orderBookPage, setOrderBookPage] = useState(1);
+    const [orderBookLimit, setOrderBookLimit] = useState(50);
+    const [orderBookSort, setOrderBookSort] = useState(null);
     const isOrderBook = menuKey === 'SearchOrdersPageKey';
 
     const legacyQuery = useInfiniteQuery({
@@ -56,11 +58,11 @@ export default function OrdersPage({ menuKey }) {
         enabled: !isOrderBook,
     });
     const orderBookQuery = useQuery({
-        queryKey: ['order-book', orderBookPage, search],
-        queryFn: () => ordersService.fetchOrderBook(orderBookPage, search),
+        queryKey: ['order-book', orderBookPage, orderBookLimit, search, orderBookSort],
+        queryFn: ({ signal }) => ordersService.fetchOrderBook(orderBookPage, search, orderBookLimit, orderBookSort, signal),
         enabled: isOrderBook,
         staleTime: 30_000,
-        retry: 1,
+        retry: retryReadOnce,
     });
     const query = isOrderBook ? orderBookQuery : legacyQuery;
     const rows = isOrderBook
@@ -68,12 +70,23 @@ export default function OrdersPage({ menuKey }) {
         : (legacyQuery.data?.pages.flatMap((page) => page.rows) ?? []);
     const first = isOrderBook ? orderBookQuery.data : legacyQuery.data?.pages[0];
     const pagination = orderBookQuery.data?.pagination;
-    const quantitiesByUnit = rows.reduce((map,row) => {
-      const unit = String(row.uom || 'UNSPECIFIED').toUpperCase().trim();
-      map[unit] = (map[unit] || 0) + toNumber(row.quantity);
-      return map;
-    }, {});
-    const loadedBalance = rows.reduce((sum,row) => sum + toNumber(row.BALKGS), 0);
+    // If the dataset shrinks after a new ERP import, return to the last valid page.
+    useEffect(() => {
+        if (isOrderBook && pagination && pagination.currentPage !== orderBookPage) {
+            setOrderBookPage(pagination.currentPage);
+        }
+    }, [isOrderBook, pagination?.currentPage, orderBookPage]);
+    const changePageSize = (size) => {
+        setSelected(null);
+        setOrderBookPage(1);
+        setOrderBookLimit(size);
+    };
+    const changeSorting = (sorting) => {
+        setSelected(null);
+        setOrderBookPage(1);
+        setOrderBookSort(sorting);
+    };
+    const summary = orderBookQuery.data?.summary;
     const columns = isOrderBook ? orderBookColumns : legacyColumns;
 
     return (<>
@@ -106,27 +119,29 @@ export default function OrdersPage({ menuKey }) {
         </div>
       </form>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {query.isLoading || query.isError ? ['Order lines', 'Ordered MTR', 'Ordered KG', 'Other UOM lines'].map(label => <Stat key={label} label={label} value="—" />) : isOrderBook ? <>
-          <Stat label="Order lines on this page" value={rows.length.toLocaleString('en-IN')} tone="primary"/>
-          <Stat label="Ordered MTR (page)" value={formatNumber((quantitiesByUnit.MTR||0)+(quantitiesByUnit.METERS||0),2)}/>
-          <Stat label="Ordered KG (page)" value={formatNumber((quantitiesByUnit.KG||0)+(quantitiesByUnit.KGS||0),2)}/>
-          <Stat label="Other UOM lines" value={rows.filter(r=>!['MTR','METERS','KG','KGS'].includes(String(r.uom||'').toUpperCase())).length}/>
-        </> : <>
-          <Stat label="Total pending KG" value={formatNumber(first?.totalPending,0)} tone="primary"/>
-          <Stat label="Total pending M" value={formatNumber(first?.totalMtr,0)}/>
-          <Stat label="Orders loaded" value={rows.length.toLocaleString('en-IN')}/>
-          <Stat label="Loaded balance KG" value={formatNumber(loadedBalance,0)}/>
-        </>}
-      </div>
+      {isOrderBook ? <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Stat label="Matching order lines" value={query.isLoading || query.isError || !summary ? '—' : formatNumber(summary.totalLines, 0)} tone="primary" hint="All matching ERP Order Book lines, not only this page" />
+        <Stat label="Ordered MTR · all matches" value={query.isLoading || query.isError || !summary ? '—' : formatNumber(summary.orderedMtr, 2)} hint="Only MTR/METER/METERS records" />
+        <Stat label="Ordered KG · all matches" value={query.isLoading || query.isError || !summary ? '—' : formatNumber(summary.orderedKg, 2)} hint="Only KG/KGS records" />
+        <Stat label="Other UOM lines" value={query.isLoading || query.isError || !summary ? '—' : formatNumber(summary.otherUomLines, 0)} hint="PRS/PAIRS and other units are never converted into KG/MTR" />
+      </div> : <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Stat label="Pending KG · reported" value={query.isLoading || query.isError || first?.totalPending == null ? '—' : formatNumber(first.totalPending, 0)} tone="primary" hint="Legacy report total when provided" />
+        <Stat label="Pending MTR · reported" value={query.isLoading || query.isError || first?.totalMtr == null ? '—' : formatNumber(first.totalMtr, 0)} hint="Legacy report total when provided" />
+      </div>}
 
-      <DataTable rows={rows} columns={columns} isLoading={query.isLoading} error={query.error ? errorMessage(query.error) : null} onRetry={() => query.refetch()} exportName={meta.title.toLowerCase().replace(/\s+/g, '-')} description={search ? `Results for "${search}"` : 'Click an order to see imported order facts and linked schedule/job cards'} onRowClick={setSelected} emptyDescription={search ? 'Try fewer or different keywords.' : undefined} footer={!isOrderBook && (legacyQuery.hasNextPage || legacyQuery.isFetchingNextPage) ? (<div className="flex justify-center">
-              <Button variant="outline" onClick={() => legacyQuery.fetchNextPage()} loading={legacyQuery.isFetchingNextPage}>
-                Load more orders
-              </Button>
-            </div>) : !isOrderBook && rows.length ? (<p className="text-center text-xs text-muted-foreground">All matching orders loaded.</p>) : null}/>
+      {isOrderBook && summary?.byUom?.length > 0 && !query.isError && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground" aria-label="ERP ordered quantities by unit">
+          <span className="font-medium">All matching quantities by UOM:</span>
+          {summary.byUom.map(({ uom, lines, quantity }) => (
+            <span key={uom} className="rounded-md border border-border bg-surface px-2.5 py-1">
+              <strong className="text-foreground">{formatNumber(quantity, 2)} {uom}</strong> · {formatNumber(lines, 0)} lines
+            </span>
+          ))}
+        </div>
+      )}
 
-      {isOrderBook && <ImportReportPagination pagination={pagination} disabled={orderBookQuery.isFetching} onPageChange={setOrderBookPage}/>}
+      <DataTable rows={rows} columns={columns} searchable={!isOrderBook} isFetching={query.isFetching} serverPagination={isOrderBook ? { pagination, disabled: query.isFetching, onPageChange: (page) => { setSelected(null); setOrderBookPage(page); }, onPageSizeChange: changePageSize } : undefined} serverSort={isOrderBook ? orderBookSort : undefined} onServerSortChange={isOrderBook ? changeSorting : undefined} isLoading={query.isLoading} error={query.error ? errorMessage(query.error) : null} onRetry={() => query.refetch()} exportName={meta.title.toLowerCase().replace(/\s+/g, '-')} description={search ? `Results for "${search}"` : 'Click an order to see imported order facts and linked schedule/job cards'} onRowClick={setSelected} emptyDescription={search ? 'Try fewer or different keywords.' : undefined} loadMore={!isOrderBook && legacyQuery.hasNextPage ? { onClick: () => legacyQuery.fetchNextPage(), loading: legacyQuery.isFetchingNextPage } : undefined}/>
+
       <OrderDetailDialog order={selected} onClose={() => setSelected(null)}/>
     </>);
 }

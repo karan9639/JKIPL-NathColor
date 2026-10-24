@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router';
+import { Link } from 'react-router';
+import { orderTrackerPath } from '@/utils/order-tracker';
 import { Dialog } from '@/components/ui/dialog';
 import { ordersService } from '@/services/orders.service';
 import { errorMessage } from '@/services/http/client';
@@ -23,13 +24,7 @@ const orderFields = [
 
 /** Read the same camelCase MongoDB records used by All Orders. No invented quantities. */
 export function OrderDetailDialog({ order, onClose }) {
-  const navigate = useNavigate();
-  const orderId = pickString(order,'orderId','ORDERID','ORDERNUMBER').trim();
-  const openTracker = () => {
-    if (!orderId) return;
-    onClose();
-    navigate(`/orders/tracker?orderId=${encodeURIComponent(orderId)}`);
-  };
+  const orderId = pickString(order,'orderId','ORDERID','ORDERNUMBER');
   const detail = useQuery({
     queryKey: ['order-summary', orderId], enabled: Boolean(orderId),
     queryFn: () => ordersService.fetchOrderSummary(orderId), staleTime: 30_000, retry: 1,
@@ -76,7 +71,7 @@ export function OrderDetailDialog({ order, onClose }) {
         ]}/>
         <p className="mt-3 text-xs text-muted-foreground">Closing, finished output and dispatched balance remain unverified until correctly mapped ERP exports exist. Job-carded KG is not produced KG.</p>
       </>}
-      <button type="button" onClick={openTracker} disabled={!orderId} className="mt-4 inline-flex min-h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50">View order / lot tracker →</button>
+      <Link onClick={onClose} to={orderTrackerPath(orderId)} className="mt-4 inline-flex rounded-md bg-primary px-3 py-2 text-sm font-medium text-white">View this order / lot tracker →</Link>
     </div>}
   </Dialog>;
 }

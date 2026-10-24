@@ -27,11 +27,15 @@ function extractOrderRows(response) {
 
 export const ordersService = {
     /** Fetch the order book saved by POST /order/create-order. */
-    async fetchOrderBook(page = 1, search = '') {
+    async fetchOrderBook(page = 1, search = '', limit = 50, sorting = null, signal) {
     const params = {
         page,
-        limit: 100,
+        limit,
     };
+    if (sorting?.key) {
+        params.sortBy = sorting.key;
+        params.sortDir = sorting.dir;
+    }
 
     if (search.trim()) {
         params.search = normalizeSearch(search);
@@ -39,7 +43,7 @@ export const ordersService = {
 
     const { data: response } = await http.get(
         '/orderbook/fetch-order',
-        { params }
+        { params, signal }
     );
 
     const payload = response?.data ?? response;
@@ -53,30 +57,17 @@ export const ordersService = {
 
     return {
         rows,
+        summary: payload?.summary ?? null,
 
-        totalPending: Number(
-            payload?.totalPending ??
-            response?.totalPending ??
-            rows.reduce(
-                (sum, row) => sum + Number(row.BALKGS ?? 0),
-                0
-            )
-        ),
-
-        totalMtr: Number(
-            payload?.totalMtr ??
-            response?.totalMtr ??
-            rows.reduce(
-                (sum, row) => sum + Number(row.BALMTR ?? 0),
-                0
-            )
-        ),
+        // Never derive "global pending" from only the visible 25/50/100 rows.
+        totalPending: payload?.totalPending == null ? null : Number(payload.totalPending),
+        totalMtr: payload?.totalMtr == null ? null : Number(payload.totalMtr),
 
         pagination: {
             totalEntries: Number(pagination.totalEntries ?? rows.length),
             totalPages: Number(pagination.totalPages ?? 1),
             currentPage: Number(pagination.currentPage ?? page),
-            limit: Number(pagination.limit ?? 100),
+            limit: Number(pagination.limit ?? limit),
 
             hasNextPage: Boolean(
                 pagination.hasNextPage ??
@@ -106,7 +97,7 @@ export const ordersService = {
         if (search.trim()) params.search = normalizeSearch(search);
         const { data } = await legacyHttp.get('/searchorders', { params });
         const rows = asRows(data);
-        return { rows, totalPending: Number(data?.totalPending ?? 0), totalMtr: Number(data?.totalMtr ?? 0), hasMore: rows.length > 0 };
+        return { rows, totalPending: data?.totalPending == null ? null : Number(data.totalPending), totalMtr: data?.totalMtr == null ? null : Number(data.totalMtr), hasMore: rows.length > 0 };
     },
 
     async fetchOrderSummary(orderId) {

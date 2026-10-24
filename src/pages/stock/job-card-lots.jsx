@@ -3,11 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { RefreshCw, Search, X } from 'lucide-react';
 import { jobCardService } from '@/services/job-card.service';
 import { errorMessage } from '@/services/http/client';
+import { retryReadOnce } from '@/services/http/retry';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/field';
 import { DataTable } from '@/components/ui/data-table';
 import { PageHeader, Stat } from '@/components/ui/panel';
-import { ImportReportPagination } from '@/components/reports/import-report-filters';
 import { formatDate, formatNumber } from '@/utils/format';
 import { readJobCardLotsPage } from '@/utils/job-card-lots';
 
@@ -26,11 +26,12 @@ export default function JobCardLotsPage() {
   const [draft, setDraft] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
   const query = useQuery({
-    queryKey: ['job-card-lots', search, page],
-    queryFn: async () => readJobCardLotsPage(await jobCardService.fetchJobCards({ page, limit: 100, ...(search ? { search } : {}) }), page),
+    queryKey: ['job-card-lots', search, page, limit],
+    queryFn: async ({ signal }) => readJobCardLotsPage(await jobCardService.fetchJobCards({ page, limit, ...(search ? { search } : {}) }, signal), page),
     staleTime: 30_000,
-    retry: 1,
+    retry: retryReadOnce,
   });
   const rows = query.data?.rows ?? [];
   const pagination = query.data?.pagination;
@@ -55,15 +56,18 @@ export default function JobCardLotsPage() {
       {(search || draft) && <Button variant="outline" onClick={clear}><X aria-hidden="true"/> Clear</Button>}
       <Button variant="outline" onClick={() => query.refetch()} loading={query.isFetching}><RefreshCw aria-hidden="true"/> Refresh</Button>
     </form>
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-      <Stat label="Matching job-card lines" value={query.isError || query.isPending ? '—' : formatNumber(pagination?.totalEntries ?? 0, 0)} tone="primary" />
-      <Stat label="Lines on current page" value={query.isError || query.isPending ? '—' : rows.length.toLocaleString('en-IN')} />
-      <Stat label="Unique lot labels (page)" value={query.isError || query.isPending ? '—' : new Set(rows.map(r => r.manualLotNo).filter(Boolean)).size.toLocaleString('en-IN')} />
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <Stat label="Matching job-card lines" value={query.isError || query.isPending || !query.data?.summary ? '—' : formatNumber(query.data.summary.totalLines, 0)} tone="primary" hint="All matching ERP allocation lines" />
+      <Stat label="Distinct job cards" value={query.isError || query.isPending || !query.data?.summary ? '—' : formatNumber(query.data.summary.distinctJobCards, 0)} />
+      <Stat label="Allocated KG · all matches" value={query.isError || query.isPending || !query.data?.summary ? '—' : formatNumber(query.data.summary.allocatedKgs, 2)} hint="ERP job-carded KG, not completed output" />
+      <Stat label="Distinct lot labels" value={query.isError || query.isPending || !query.data?.summary ? '—' : formatNumber(query.data.summary.distinctLotLabels, 0)} hint="Distinct manual-lot labels, not physical warehouse lots" />
     </div>
     <DataTable
       rows={rows}
       columns={columns}
       searchable={false}
+      isFetching={query.isFetching}
+      serverPagination={{ pagination, disabled: query.isFetching, onPageChange: setPage, onPageSizeChange: (value) => { setPage(1); setLimit(value); } }}
       isLoading={query.isPending}
       error={query.isError ? errorMessage(query.error) : null}
       onRetry={() => query.refetch()}
@@ -72,6 +76,5 @@ export default function JobCardLotsPage() {
       emptyTitle="No job-card lot lines found"
       emptyDescription={search ? 'Try another lot number, order ID, job card number, or item.' : 'Import the Open Job Cards ERP report first.'}
     />
-    <ImportReportPagination pagination={pagination} disabled={query.isFetching} onPageChange={setPage}/>
   </div>;
 }

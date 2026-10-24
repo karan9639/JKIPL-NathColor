@@ -5,6 +5,7 @@ import { exportRowsToXlsx } from '@/utils/spreadsheet';
 import { Button } from './button';
 import { Input, Select } from './field';
 import { Dialog } from './dialog';
+import { getServerPageMeta } from '@/utils/server-pagination';
 import { EmptyState, ErrorState, LoadingState, Panel } from './panel';
 function inferColumns(rows) {
     const first = rows[0];
@@ -14,9 +15,10 @@ function inferColumns(rows) {
         .filter((k) => typeof first[k] !== 'object' || first[k] === null)
         .map((key) => ({ key, align: rows.slice(0, 10).every((r) => r[key] === '' || r[key] == null || isNumericLike(r[key])) ? 'right' : 'left' }));
 }
-export function DataTable({ rows = [], columns, title, description, isLoading, isFetching, error, onRetry, searchable = true, exportName, toolbar, footer, emptyTitle = 'No records found', emptyDescription, onRowClick, maxHeight = '70vh', mobileRow, }) {
+export function DataTable({ rows = [], columns, title, description, isLoading, isFetching, error, onRetry, searchable = true, exportName, toolbar, footer, emptyTitle = 'No records found', emptyDescription, onRowClick, maxHeight = '70vh', mobileRow, serverPagination, serverSort, onServerSortChange, loadMore, }) {
     const [query, setQuery] = useState('');
-    const [sort, setSort] = useState(null);
+    const [localSort, setLocalSort] = useState(null);
+    const sort = serverPagination ? serverSort : localSort;
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(50);
     const [cellDetail, setCellDetail] = useState(null);
@@ -32,7 +34,7 @@ export function DataTable({ rows = [], columns, title, description, isLoading, i
                 return words.every((w) => hay.includes(w));
             });
         }
-        if (sort) {
+        if (sort && !serverPagination) {
             const col = cols.find((c) => c.key === sort.key);
             const getter = col?.sortValue ?? ((r) => (col?.align === 'right' ? toNumber(rowField(r, sort.key)) : String(rowField(r, sort.key) ?? '')));
             out = [...out].sort((a, b) => {
@@ -50,11 +52,29 @@ export function DataTable({ rows = [], columns, title, description, isLoading, i
             });
         }
         return out;
-    }, [rows, deferredQuery, sort, cols]);
+    }, [rows, deferredQuery, sort, cols, serverPagination]);
     const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
     const currentPage = Math.min(page, totalPages);
-    const pageRows = visible.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-    const toggleSort = (key) => { setPage(1); setSort((s) => (s?.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : null)); };
+    // Server already returned the requested page: never slice it again.
+    const pageRows = serverPagination ? visible : visible.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+    const toggleSort = (key) => {
+        if (serverPagination) {
+            if (onServerSortChange) {
+                onServerSortChange(serverSort?.key === key
+                    ? { key, dir: serverSort.dir === 'asc' ? 'desc' : 'asc' }
+                    : { key, dir: 'asc' });
+            }
+            return;
+        }
+        setPage(1);
+        setLocalSort((s) => (s?.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : null));
+    };
+    const { total: remoteTotal, limit: remoteLimit, page: remoteCurrent,
+        pages: remotePages, start: remoteStart, end: remoteEnd } = getServerPageMeta(serverPagination?.pagination, pageRows.length);
+    const paginationBusy = Boolean(serverPagination?.disabled || isFetching || isLoading);
+    // A remote table without an actual sort endpoint must not pretend to sort globally.
+    const sortingEnabled = !serverPagination || typeof onServerSortChange === 'function';
+
     const showToolbar = title || searchable || exportName || toolbar;
     return (<Panel className="flex min-w-0 flex-col overflow-hidden">
       {showToolbar && (<div className="no-print flex flex-col gap-3 border-b border-border px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
@@ -62,9 +82,9 @@ export function DataTable({ rows = [], columns, title, description, isLoading, i
             {title && <h2 className="text-sm font-semibold">{title}</h2>}
             <p className="text-xs text-muted-foreground">
               {description ? `${description} · ` : ''}
-              <span className="tabular">{isLoading || error ? '—' : visible.length.toLocaleString('en-IN')}</span>
+              <span className="tabular">{isLoading || error ? '—' : (serverPagination ? remoteTotal : visible.length).toLocaleString('en-IN')}</span>
               {(isFetching || query !== deferredQuery) && <span role="status" className="ml-2 text-primary">Updating…</span>}
-              {visible.length !== rows.length && <> of <span className="tabular">{rows.length.toLocaleString('en-IN')}</span></>} rows
+              {!serverPagination && visible.length !== rows.length && <> of <span className="tabular">{rows.length.toLocaleString('en-IN')}</span></>} rows
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -78,7 +98,7 @@ export function DataTable({ rows = [], columns, title, description, isLoading, i
               </div>)}
             {exportName && (<Button variant="outline" size="sm" className="h-9" disabled={!visible.length || isLoading || !!error || query !== deferredQuery} onClick={() => exportRowsToXlsx(visible.map((row) => Object.fromEntries(cols.map((c) => [c.key, rowField(row, c.key) ?? '']))), cols.map((c) => c.key), exportName)}>
                 <Download aria-hidden="true"/>
-                Export
+                {serverPagination ? 'Export page' : 'Export'}
               </Button>)}
           </div>
         </div>)}
@@ -91,16 +111,16 @@ export function DataTable({ rows = [], columns, title, description, isLoading, i
                 {cols.map((c) => {
                 const active = sort?.key === c.key;
                 return (<th key={c.key} scope="col" aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'} className={cn('border-b border-border px-3 py-2 text-xs font-semibold whitespace-nowrap text-muted-foreground', c.align === 'right' ? 'text-right' : 'text-left')}>
-                      <button type="button" onClick={() => toggleSort(c.key)} className={cn('inline-flex min-h-8 items-center gap-1.5 hover:text-foreground', c.align === 'right' && 'flex-row-reverse')}>
+                      <button type="button" onClick={() => toggleSort(c.key)} disabled={!sortingEnabled} className={cn('inline-flex min-h-8 items-center gap-1.5', sortingEnabled && 'hover:text-foreground', c.align === 'right' && 'flex-row-reverse')}>
                         {c.label ?? humanizeKey(c.key)}
-                        {active ? sort.dir === 'asc' ? <ArrowUp className="size-3" aria-hidden="true"/> : <ArrowDown className="size-3" aria-hidden="true"/> : <ArrowUpDown className="size-3 opacity-40" aria-hidden="true"/>}
+                        {sortingEnabled && (active ? sort.dir === 'asc' ? <ArrowUp className="size-3" aria-hidden="true"/> : <ArrowDown className="size-3" aria-hidden="true"/> : <ArrowUpDown className="size-3 opacity-40" aria-hidden="true"/>)}
                       </button>
                     </th>);
             })}
               </tr>
             </thead>
             <tbody>
-              {pageRows.map((row, i) => (<tr key={i} onClick={onRowClick ? () => onRowClick(row) : undefined} onKeyDown={onRowClick ? (e) => e.target === e.currentTarget && !e.nativeEvent.isComposing && e.keyCode !== 229 && (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onRowClick(row)) : undefined} tabIndex={onRowClick ? 0 : undefined} className={cn('border-b border-border/70 transition-colors duration-150 last:border-0 even:bg-muted/20 hover:bg-primary-soft/40', onRowClick && 'cursor-pointer hover:bg-primary-soft/60 focus-visible:bg-primary-soft/60')}>
+              {pageRows.map((row, i) => (<tr key={row._id ?? row.recordKey ?? i} onClick={onRowClick ? () => onRowClick(row) : undefined} onKeyDown={onRowClick ? (e) => e.target === e.currentTarget && !e.nativeEvent.isComposing && e.keyCode !== 229 && (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onRowClick(row)) : undefined} tabIndex={onRowClick ? 0 : undefined} className={cn('border-b border-border/70 transition-colors duration-150 last:border-0 even:bg-muted/20 hover:bg-primary-soft/40', onRowClick && 'cursor-pointer hover:bg-primary-soft/60 focus-visible:bg-primary-soft/60')}>
                   {cols.map((c) => (<td key={c.key} className={cn('px-3 py-2 align-top whitespace-nowrap', c.align === 'right' && 'tabular text-right', c.className)}>
                       {c.className?.includes('truncate') ? <button type="button" title={formatCell(rowField(row, c.key))} className="block max-w-full truncate text-left underline decoration-border underline-offset-4 hover:decoration-primary" aria-label={`View full ${c.label ?? humanizeKey(c.key)}: ${formatCell(rowField(row, c.key))}`} onClick={(event) => { event.stopPropagation(); setCellDetail({ title: c.label ?? humanizeKey(c.key), value: formatCell(rowField(row, c.key)) }); }}>{c.render ? c.render(row) : formatCell(rowField(row, c.key))}</button> : c.render ? c.render(row) : formatCell(rowField(row, c.key))}
                     </td>))}
@@ -108,15 +128,40 @@ export function DataTable({ rows = [], columns, title, description, isLoading, i
             </tbody>
           </table>
         </div>{mobileRow && <div className="divide-y divide-border md:hidden">{pageRows.map((row, index) => <div key={row._id ?? index}>{mobileRow(row)}</div>)}</div>}</>)}
-      {!!visible.length && !isLoading && !error && <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3 text-xs text-muted-foreground">
-        <span>Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, visible.length)} of {visible.length.toLocaleString('en-IN')} rows</span>
-        <div className="flex flex-wrap items-center gap-2">
-          <label htmlFor={`${filterId}-size`} className="sr-only">Rows per page</label><Select id={`${filterId}-size`} className="h-9 w-24 text-xs" value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}>{[25, 50, 100].map(size => <option key={size} value={size}>{size} rows</option>)}</Select>
-          <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Previous</Button>
-          <span className="tabular">{currentPage} / {totalPages}</span>
-          <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next</Button>
+      {/* Exactly one pager. Server mode uses the entire filtered MongoDB result count. */}
+      {(!!visible.length || (serverPagination && remoteTotal > 0)) && !isLoading && !error && (serverPagination ? (
+        <div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <span aria-live="polite">
+            Showing <strong className="text-foreground">{remoteStart.toLocaleString('en-IN')}–{remoteEnd.toLocaleString('en-IN')}</strong> of{' '}
+            <strong className="text-foreground">{remoteTotal.toLocaleString('en-IN')}</strong> records
+          </span>
+          <div className="flex flex-wrap items-center gap-2" aria-label="Records pagination">
+            <label htmlFor={`${filterId}-server-size`} className="sr-only">Rows per page</label>
+            <Select id={`${filterId}-server-size`} className="h-9 w-28 text-xs" value={remoteLimit}
+              disabled={paginationBusy}
+              onChange={(event) => serverPagination.onPageSizeChange(Number(event.target.value))}>
+              {[25, 50, 100].map((size) => <option key={size} value={size}>{size} rows</option>)}
+            </Select>
+            <Button type="button" variant="outline" size="sm" disabled={paginationBusy || remoteCurrent <= 1}
+              onClick={() => serverPagination.onPageChange(remoteCurrent - 1)}>Previous</Button>
+            <span className="whitespace-nowrap tabular">Page {remoteCurrent.toLocaleString('en-IN')} / {remotePages.toLocaleString('en-IN')}</span>
+            <Button type="button" variant="outline" size="sm" disabled={paginationBusy || remoteCurrent >= remotePages}
+              onClick={() => serverPagination.onPageChange(remoteCurrent + 1)}>Next</Button>
+          </div>
         </div>
-      </div>}
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3 text-xs text-muted-foreground">
+          <span>Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, visible.length)} of {visible.length.toLocaleString('en-IN')} rows</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor={`${filterId}-size`} className="sr-only">Rows per page</label>
+            <Select id={`${filterId}-size`} className="h-9 w-24 text-xs" value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}>{[25, 50, 100].map(size => <option key={size} value={size}>{size} rows</option>)}</Select>
+            <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Previous</Button>
+            <span className="tabular">{currentPage} / {totalPages}</span>
+            <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next</Button>
+            {loadMore && <Button type="button" variant="outline" size="sm" disabled={loadMore.loading} loading={loadMore.loading} onClick={loadMore.onClick}>Load more records</Button>}
+          </div>
+        </div>
+      ))}
       {footer && <div className="border-t border-border px-4 py-3">{footer}</div>}
       <Dialog open={!!cellDetail} onOpenChange={open => !open && setCellDetail(null)} title={cellDetail?.title || 'Full value'}><p className="whitespace-pre-wrap break-words text-sm">{cellDetail?.value}</p></Dialog>
     </Panel>);
