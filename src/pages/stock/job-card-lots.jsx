@@ -100,7 +100,7 @@ export default function JobCardLotsPage() {
               value={draft}
               maxLength={120}
               placeholder="e.g. 143021, 187127, 2321/1"
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => {const next=e.target.value;setDraft(next);if(!next.trim()){setSearch('');setPage(1);}}}
             />
           </div>
         </div>
@@ -159,6 +159,7 @@ export default function JobCardLotsPage() {
         />
       </div>
       <DataTable
+        title="Job card allocation lines"
         rows={rows}
         columns={columns}
         searchable={false}

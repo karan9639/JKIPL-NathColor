@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'sonner';
 import { navigationChanged } from '@/state/store';
@@ -54,15 +54,33 @@ function UserFooter() {
 export function AppShell() {
     const { logout, isLoggingOut } = useAuth();
     const [collapsed, setCollapsed] = useState(false);
+    const mainScrollRef = useRef(null);
     const dispatch = useDispatch();
     const open = useSelector((state) => state.ui.navigationOpen);
     const setOpen = (value) => dispatch(navigationChanged(value));
     const location = useLocation();
     const current = findNavItem(location.pathname);
+    // The SPA owns scroll restoration; browser document-level restoration can
+    // jump when a navigation changes between collapsed/expanded sidebar widths.
+    useEffect(() => {
+        const previous = window.history.scrollRestoration;
+        window.history.scrollRestoration = 'manual';
+        return () => { window.history.scrollRestoration = previous; };
+    }, []);
+    // Reset only on route navigation, never when toggling the sidebar.
+    // Layout effect runs before paint so restored document offsets do not flash.
+    useLayoutEffect(() => {
+        if (mainScrollRef.current) {
+            mainScrollRef.current.scrollTop = 0;
+            mainScrollRef.current.scrollLeft = 0;
+        }
+        // Recover the document from a previously saved browser scroll position.
+        window.scrollTo(0, 0);
+    }, [location.pathname, location.search]);
     return (
-      <div className="flex min-h-dvh">
+      <div className="app-shell-root flex min-h-0 w-full overflow-hidden">
 <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-primary focus:px-4 focus:py-3 focus:text-white">Skip to content</a>
-        <aside className={cn('no-print sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-border bg-surface transition-[width] duration-200 lg:flex', collapsed ? 'w-16' : 'w-60')}>
+        <aside className={cn('no-print hidden h-full min-h-0 shrink-0 flex-col overflow-hidden border-r border-border bg-surface transition-[width] duration-200 lg:flex', collapsed ? 'w-16' : 'w-60')}>
           {collapsed ? <div className="flex h-16 items-center justify-center"><BrandMark className="h-8" /></div> : <Brand />}
           <NavList collapsed={collapsed} />
           {!collapsed && <UserFooter />}
@@ -74,8 +92,8 @@ export function AppShell() {
           <UserFooter />
         </Sheet>
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="no-print sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-border bg-surface/95 px-3 backdrop-blur sm:px-4">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <header className="no-print relative z-30 flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border bg-surface/95 px-3 backdrop-blur sm:px-4">
             <div className="flex min-w-0 items-center gap-2 sm:gap-3">
               <Button
                 variant="ghost"
@@ -129,7 +147,7 @@ export function AppShell() {
               your .env file to connect to the live server.
             </div>
           )}
-          <main id="main-content" tabIndex={-1} className="mx-auto flex w-full min-w-0 flex-1 flex-col gap-5 p-3 sm:p-5 xl:p-6">
+          <main ref={mainScrollRef} id="main-content" tabIndex={-1} className="app-content-scroll flex min-h-0 w-full min-w-0 flex-1 flex-col gap-5 overflow-x-hidden overflow-y-auto overscroll-contain p-3 [&>*]:shrink-0 sm:p-5 xl:p-6">
             <Outlet />
           </main>
         </div>

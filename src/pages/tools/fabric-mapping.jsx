@@ -37,7 +37,7 @@ export default function FabricMappingPage() {
         <Stat label="Unmapped" value={mappings.isLoading || mappings.isError ? '—' : unmapped} tone="accent"/>
         <Stat label="ERP items" value={erpNames.data?.length ?? '…'}/>
       </div>
-      <DataTable rows={rows} columns={columns} isLoading={mappings.isLoading} error={mappings.error ? errorMessage(mappings.error) : null} onRetry={() => mappings.refetch()} exportName="fabric-mapping" onRowClick={(r) => {
+      <DataTable title="Fabric name mappings" rows={rows} columns={columns} isLoading={mappings.isLoading} error={mappings.error ? errorMessage(mappings.error) : null} onRetry={() => mappings.refetch()} exportName="fabric-mapping" onRowClick={(r) => {
             setSelected(r);
             setErp(pickString(r, 'ERP_Name'));
         }}/>

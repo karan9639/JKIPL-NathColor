@@ -60,6 +60,6 @@ export default function ReportPages() {
           {def.totals.map(([key, label], i) => (<Stat key={key} label={`Total ${label.toLowerCase()}`} value={query.isError || query.isLoading ? '—' : formatNumber(rows.reduce((s, r) => s + toNumber(r[key]), 0))} tone={i === 0 ? 'primary' : 'default'}/>))}
           <Stat label="Days" value={query.isError || query.isLoading ? '—' : rows.length}/>
         </div>)}
-      <DataTable rows={rows} columns={def.columns} isLoading={query.isLoading} error={query.error ? errorMessage(query.error) : null} onRetry={() => query.refetch()} exportName={report}/>
+      <DataTable title={`${def.title} records`} rows={rows} columns={def.columns} isLoading={query.isLoading} error={query.error ? errorMessage(query.error) : null} onRetry={() => query.refetch()} exportName={report}/>
     </>);
 }

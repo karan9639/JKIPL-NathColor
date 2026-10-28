@@ -134,6 +134,7 @@ export default function YarnStockPage() {
         />
       </div>
       <DataTable
+        title="Yarn stock records"
         rows={rows}
         columns={columns}
         isLoading={query.isPending}

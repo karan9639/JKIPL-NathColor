@@ -15,17 +15,21 @@ export const productionService = {
         const { data } = await legacyHttp.post(endpoint, { ...payload, username: username() });
         return data;
     },
-    async productionStages() {
-        const { data } = await legacyHttp.get('/production_stages');
-        return asRows(data);
+    async productionStages({page=1,limit=50,status='ALL',signal}={}) {
+        const {data}=await legacyHttp.get('/production_stages',{params:{paged:1,page,limit,status},signal});
+        return data?.data??{rows:[],summary:{},pagination:{currentPage:page,limit,totalEntries:0,totalPages:1}};
     },
-    async tracker() {
-        const { data } = await legacyHttp.get('/vtracker');
-        return asRows(data);
+    async tracker({ page = 1, limit = 50, status = 'All', search = '', signal } = {}) {
+        const { data } = await legacyHttp.get('/vtracker', {
+            params: { paged: 1, page, limit, status, search }, signal,
+        });
+        return data?.data ?? { rows: [], summary: {}, pagination: { totalEntries: 0, totalPages: 1, currentPage: page, limit } };
     },
-    async knittingPOLines() {
-        const { data } = await legacyHttp.get('/knitting/po-lines');
-        return asRows(data);
+    async knittingPOLines({page=1,limit=50,filters={},signal}={}) {
+        const {data}=await legacyHttp.get('/knitting/po-lines',{
+            params:{paged:1,page,limit,basis:filters.basis||'PO_DATE',from:filters.from||'',to:filters.to||'',search:filters.search||'',status:filters.status||'ALL'},signal,
+        });
+        return data?.data??{rows:[],summary:{},pagination:{currentPage:page,limit,totalEntries:0,totalPages:1}};
     },
     async records() {
         const { data } = await legacyHttp.get('/vrecords');

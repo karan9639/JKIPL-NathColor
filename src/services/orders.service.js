@@ -1,3 +1,4 @@
+import { isAllPageSize } from '@/utils/all-page-size';
 import { http, legacyHttp } from '@/services/http/client';
 import { session } from '@/services/auth/session';
 import { asRows } from '@/utils/format';
@@ -67,7 +68,7 @@ export const ordersService = {
             totalEntries: Number(pagination.totalEntries ?? rows.length),
             totalPages: Number(pagination.totalPages ?? 1),
             currentPage: Number(pagination.currentPage ?? page),
-            limit: Number(pagination.limit ?? limit),
+            limit: isAllPageSize(pagination.limit ?? limit) ? 'all' : Number(pagination.limit ?? limit),
 
             hasNextPage: Boolean(
                 pagination.hasNextPage ??

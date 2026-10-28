@@ -1,20 +1,19 @@
-import { useState } from 'react';
+import { localPageSize } from '@/utils/all-page-size';
+import { useDeferredValue, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ClipboardPaste, FileUp, Upload, RefreshCw } from 'lucide-react';
+import { ClipboardPaste, FileUp, Upload, Eye } from 'lucide-react';
 import { dyeingService } from '@/services/dyeing.service';
 import { yarnService } from '@/services/yarn.service';
 import { ordersService } from '@/services/orders.service';
 import { greigeStockService } from '@/services/greige-stock.service';
 import { importsService } from '@/services/imports.service';
 import { errorMessage } from '@/services/http/client';
-import { config } from '@/config/env';
-import { chunk, exportRowsToXlsx, parseClipboardTable, readHtmlTables, readWorkbook } from '@/utils/spreadsheet';
-import { extractYarnTable, extractOrderBookTable, dataTableRows } from '@/utils/import-mappers';
-import { normalizePlanningSheet } from '@/utils/knitting';
+import { chunk, parseClipboardTable, readHtmlTables, readWorkbook } from '@/utils/spreadsheet';
+import { dataTableRows } from '@/utils/import-mappers';
 import { humanizeKey } from '@/utils/format';
-import { normalizeU3GreigeSheet } from '@/utils/u3-ledger';
+import { parseERPFile, withErpOccurrences } from '@/utils/erp-file-parser';
 import { IMPORTS } from '@/constants/imports';
 import { flattenForPreview, summarize, normalizeRecords } from '@/utils/import-transform';
 import { Button } from '@/components/ui/button';
@@ -32,7 +31,12 @@ export default function ImportsRouter() {
 }
 function ImportPage({ def }) {
     const queryClient = useQueryClient();
+    const reviewRef = useRef(null);
     const [paste, setPaste] = useState('');
+    const [previewPage, setPreviewPage] = useState(1);
+    const [previewLimit, setPreviewLimit] = useState(50);
+    const [previewSearch, setPreviewSearch] = useState('');
+    const deferredPreviewSearch = useDeferredValue(previewSearch);
     const [file, setFile] = useState(null);
     const [rows, setRows] = useState([]);
     const [issues, setIssues] = useState([]);
@@ -49,8 +53,15 @@ function ImportPage({ def }) {
     const [savedLimit, setSavedLimit] = useState(50);
 
     const finishParse = (sourceRows) => {
-        const { rows: clean, errors, duplicateRows: repeated = 0 } = normalizeRecords(def, sourceRows);
+        const normalized = normalizeRecords(def, sourceRows);
+        if (!Array.isArray(normalized?.rows) || !Array.isArray(normalized?.errors)) {
+            throw new Error('ERP validation returned invalid rows/errors. Check the selected report format.');
+        }
+        const { rows: rawClean, errors, duplicateRows: repeated = 0 } = normalized;
+        const clean = ['/insertDispatch','/insertClosedJobCards','/upload-recipe'].includes(def.endpoint) ? withErpOccurrences(rawClean) : rawClean;
         setDuplicateRows(repeated);
+        setPreviewPage(1);
+        setPreviewSearch('');
         setUploadError(null);
         setRows(clean);
         setIssues(errors);
@@ -67,52 +78,19 @@ function ImportPage({ def }) {
         setResult(null);
         setUploadError(null);
         setDuplicateRows(0);
-        
+        setPreviewPage(1);
+        setPreviewSearch('');
         setParsing(true);
         try {
-            if (def.backend === 'orderbook') {
-                // ERP exports may be real Excel workbooks or HTML tables saved with .xls.
-                const fileStart = await selectedFile.slice(0, 512).text().catch(() => '');
-                const looksLikeHtml = /<\s*(html|table|head|body)\b/i.test(fileStart);
-                if (/\.(html?|htm)$/i.test(selectedFile.name) || looksLikeHtml) {
-                    const tables = await readHtmlTables(selectedFile);
-                    finishParse(extractOrderBookTable(tables));
-                } else {
-                    const book = await readWorkbook(selectedFile);
-                    const sheet = book.sheetNames[0];
-                    finishParse(dataTableRows(book.sheetRows(sheet, false), ['ORDER ID', 'CUSTOMER NAME', 'ITEM NAME']));
-                }
-            } else if (def.source === 'html') {
-                const tables = await readHtmlTables(selectedFile);
-                if (def.backend === 'yarn') {
-                    const { records, reportPeriod } = extractYarnTable(tables);
-                    setPeriod(reportPeriod ?? { fromDate: '', toDate: '' });
-                    finishParse(records);
-                } else {
-                    const biggest = [...tables].sort((a, b) => b.length - a.length)[0] ?? [];
-                    finishParse(dataTableRows(biggest, def.endpoint === '/insertJobCards' ? ['ORDER ID','JOB CARD NO.','CUSTOMER NAME','ITEM NAME'] : [], 3));
-                }
-            } else {
-                const book = await readWorkbook(selectedFile);
-                if (def.requiredSheet && def.sheet && !book.sheetNames.includes(def.sheet)) {
-                    throw new Error(`Required worksheet "${def.sheet}" not found. Available sheets: ${book.sheetNames.slice(0, 8).join(', ')}`);
-                }
-                const sheet = def.sheet && book.sheetNames.includes(def.sheet) ? def.sheet : book.sheetNames[0];
-                if (def.sheet && sheet !== def.sheet) toast.warning(`Sheet "${def.sheet}" not found, using "${sheet}"`);
-                const table = book.sheetRows(sheet, !!def.knittingFormat || def.backend === 'dyeing');
-                if (def.backend === 'greige-u3') {
-                    finishParse(normalizeU3GreigeSheet(table));
-                } else if (def.knittingFormat) {
-                    finishParse(normalizePlanningSheet(table, selectedFile.name));
-                } else {
-                    const required = def.backend === 'dyeing' ? ['Dyeing Schedule Date', 'Dyeing Schedule No.', 'Order ID'] : [];
-                    finishParse(dataTableRows(table, required, def.extra?.unit === 'U-2' ? 2 : 3));
-                }
-            }
+            const parsed = await parseERPFile(selectedFile, def, {readWorkbook,readHtmlTables});
+            if (!Array.isArray(parsed?.rows)) throw new Error('ERP parser returned an invalid result.');
+            if (def.backend === 'yarn') setPeriod(parsed.reportPeriod ?? {fromDate:'',toDate:''});
+            finishParse(parsed.rows);
         } catch (e) {
             setRows([]);
             setIssues([]);
             toast.error(`Could not read file: ${errorMessage(e)}`);
+            setUploadError({ message: `Could not read file: ${errorMessage(e)}` });
         } finally { setParsing(false); }
     };
     const pasteData = () => {
@@ -198,6 +176,7 @@ function ImportPage({ def }) {
             void queryClient.invalidateQueries({ queryKey: ['tracker'] });
             void queryClient.invalidateQueries({ queryKey: ['dyeing-programs'] });
             void queryClient.invalidateQueries({ queryKey: ['yarn-stock'] });
+            void queryClient.invalidateQueries({ queryKey: ['recipe-records'] });
             void queryClient.invalidateQueries({ queryKey: ['greige-stock'] });
             void queryClient.invalidateQueries({ queryKey: ['orders'] });
             for (const key of ['order-book', 'order-summary', 'order-tracker', 'job-card-lots', 'records', 'report', 'lud']) void queryClient.invalidateQueries({ queryKey: [key] });
@@ -217,14 +196,29 @@ function ImportPage({ def }) {
             setSavedError(error.status === 404 ? 'No imports found for this date.' : errorMessage(error));
         } finally { setSavedLoading(false); }
     };
-    // Preview the entire parsed file through one local DataTable pager, not a 100-row sample.
-    const previewRows = rows.map(flattenForPreview);
+    // Review every ERP row but render only the current preview page.
+    // For large files this avoids rendering/flattening thousands of rows at once.
+    const previewMatches = useMemo(() => {
+        const words = deferredPreviewSearch.trim().toUpperCase().split(/\s+/).filter(Boolean);
+        if (!words.length) return rows;
+        return rows.filter(row => {
+            const haystack = JSON.stringify(row).toUpperCase();
+            return words.every(word => haystack.includes(word));
+        });
+    }, [rows, deferredPreviewSearch]);
+    const previewEffectiveLimit = localPageSize(previewLimit, previewMatches.length);
+    const previewPages = Math.max(1, Math.ceil(previewMatches.length / previewEffectiveLimit));
+    const activePreviewPage = Math.min(previewPage, previewPages);
+    const previewRows = useMemo(() => previewMatches
+        .slice((activePreviewPage - 1) * previewEffectiveLimit, activePreviewPage * previewEffectiveLimit)
+        .map(flattenForPreview), [previewMatches, activePreviewPage, previewEffectiveLimit]);
+    const previewColumns = useMemo(() => Object.keys(flattenForPreview(rows[0] ?? {})), [rows]);
     const orderedPreviewKeys = def.backend === 'greige-u3' ? [
         'itemName', 'uom', 'closing.qtyKgs', 'closing.qty', 'receipt.qtyKgs', 'issue.qtyKgs',
         'lastReceived.date', 'lastReceived.qtyKgs', 'lastIssue.date', 'lastIssue.qtyKgs',
         'opening.qtyKgs', 'opening.qty',
-    ] : Object.keys(previewRows[0] ?? {}).slice(0, 12);
-    const columns = previewRows[0] ? orderedPreviewKeys.map((key) => ({ key, label: humanizeKey(key), align: /qty|kgs/i.test(key) ? 'right' : 'left' })) : [];
+    ].filter(key => previewColumns.includes(key)) : previewColumns;
+    const columns = orderedPreviewKeys.map(key => ({ key, label: humanizeKey(key), align: /qty|kgs/i.test(key) ? 'right' : 'left' }));
     const errorRows = Array.isArray(result?.error_rows) ? result.error_rows : [];
     const canUpload = rows.length > 0 && !issues.length && !parsing && (def.backend !== 'yarn' || (!!period.fromDate && !!period.toDate && period.fromDate <= period.toDate));
     const showUploadFile = def.source !== 'paste' || def.allowFile;
@@ -258,7 +252,8 @@ function ImportPage({ def }) {
                     : 'Preview and validate the ERP rows before importing.'}
             </p>
           </div>
-          <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:items-end">
+          <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
+            {rows.length > 0 && !parsing && <Button variant="outline" size="sm" disabled={upload.isPending} onClick={() => reviewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><Eye aria-hidden="true"/> Review all rows</Button>}
             <Button
               size="lg"
               className="w-full sm:w-auto"
@@ -328,7 +323,23 @@ function ImportPage({ def }) {
           <ul className="mt-2 max-h-40 list-disc space-y-1 overflow-auto pl-5">{issues.slice(0, 30).map((issue, index) => <li key={index}>{issue}</li>)}</ul>
           {issues.length > 30 && <p className="mt-2">Showing the first 30 issues.</p>}
       </div>}
-      {(rows.length > 0 || parsing) && <DataTable rows={previewRows} columns={columns} isLoading={parsing} title="2. Review data" description={`${rows.length} valid row(s)${columns.length === 12 ? ' · first 12 columns' : ''}`} searchable={false}/>}
+      {(rows.length > 0 || parsing) && <div ref={reviewRef} className="min-w-0 scroll-mt-24"><DataTable
+          rows={previewRows}
+          columns={columns}
+          isLoading={parsing}
+          title="2. Review data"
+          description={`${rows.length.toLocaleString('en-IN')} valid ERP row(s) — ALL rows available; ${previewMatches.length.toLocaleString('en-IN')} match preview filter. ${columns.length} source columns.`}
+          searchable={false}
+          toolbar={<div className="min-w-0"><label className="sr-only" htmlFor="erp-preview-search">Search all preview rows</label><Input id="erp-preview-search" className="h-9 w-full sm:w-60" value={previewSearch} onChange={e => {setPreviewSearch(e.target.value);setPreviewPage(1);}} placeholder="Search all ERP rows…" aria-label="Search all ERP rows" /></div>}
+          serverPagination={{
+              pagination: { totalEntries: previewMatches.length, currentPage: activePreviewPage, limit: previewLimit },
+              onPageChange: setPreviewPage,
+              onPageSizeChange: size => { setPreviewLimit(size); setPreviewPage(1); },
+              disabled: parsing || upload.isPending,
+          }}
+          emptyDescription="No ERP rows match your preview search."
+          maxHeight="55vh"
+      /></div>}
       {result && <>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{summarize(result).map(([label, value]) => <Stat key={label} label={label} value={value}/>)}</div>
           {errorRows.length > 0 && <DataTable rows={errorRows} columns={Object.keys(errorRows[0]).map((key) => ({ key, label: key }))} title="Rejected rows" exportName="import-errors"/>}

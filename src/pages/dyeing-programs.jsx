@@ -176,6 +176,7 @@ export default function DyeingProgramsPage() {
         />
       </div>
       <DataTable
+        title="Dyeing schedule records"
         rows={rows}
         columns={columns}
         isLoading={query.isPending}

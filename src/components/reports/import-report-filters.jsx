@@ -10,7 +10,7 @@ const INITIAL = { mode: 'latest', date: '', fromDate: '', toDate: '', search: ''
 export function ImportReportFilters({ kind, onApply, onRefresh, loading = false, pageSize = 50 }) {
     const [draft, setDraft] = useState(INITIAL);
     const [validation, setValidation] = useState('');
-    const change = (name, value) => { setValidation(''); setDraft((d) => ({ ...d, [name]: value })); };
+    const change = (name, value) => { setValidation(''); setDraft((d) => ({ ...d, [name]: value })); if(name==='search'&&!value.trim()) onApply(importQueryParams({...draft,search:'',page:1,limit:pageSize})); };
     const apply = (event) => {
         event.preventDefault();
         if (draft.mode === 'date' && !draft.date) {

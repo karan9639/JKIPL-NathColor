@@ -13,6 +13,7 @@ export function summarize(result) {
         .map(([k, v]) => [humanizeKey(k), Array.isArray(v) ? String(v.length) : String(v)]);
 }
 export function normalizeRecords(def, sourceRows) {
+    if (!Array.isArray(sourceRows)) throw new Error('Parser did not return an array of ERP data rows. Check that the selected file matches this import type.');
     if (def.endpoint === '/insertJobCards') return preflightJobCards(sourceRows);
     if (def.backend === 'dyeing') return normalizeDyeingRecords(sourceRows);
     if (def.backend === 'yarn') return normalizeYarnRecords(sourceRows);

@@ -26,7 +26,7 @@ test('yarn/dyeing remote report filters preserve user page size', () => {
   for (const page of ['pages/dyeing-programs.jsx', 'pages/stock/yarn.jsx']) {
     const source = read(page);
     assert.match(source, /limit: previous\.limit, page: 1/, page);
-    assert.match(source, /queryKey: \[(?:'dyeing-programs'|'yarn-stock'), params\]/, page);
+    assert.match(source, /queryKey: \[(?:['\"]dyeing-programs['\"]|['\"]yarn-stock['\"]), params\]/, page);
   }
   const filters = read('components/reports/import-report-filters.jsx');
   assert.match(filters, /pageSize = 50/);

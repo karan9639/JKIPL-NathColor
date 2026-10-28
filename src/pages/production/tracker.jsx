@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { RefreshCw, Clock3 } from "lucide-react";
+import { RefreshCw, Clock3, Search } from "lucide-react";
 import { productionService } from "@/services/production.service";
 import { errorMessage } from "@/services/http/client";
 import { formatNumber, pickString } from "@/utils/format";
@@ -10,11 +10,13 @@ import {
   formatTimelineRow,
   getTimelineEvents,
   openingSortKey,
+  formatRecordedEvent,
 } from "@/utils/lot-timeline";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge, PageHeader, Panel, Stat } from "@/components/ui/panel";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/field";
 
 const statusTone = {
   Closed: "success",
@@ -159,6 +161,20 @@ function Detail({ row }) {
           </p>
         )}
       </div>
+      {Array.isArray(row.EVENT_HISTORY) && row.EVENT_HISTORY.length > 0 && (
+        <div className="space-y-2 border-t border-border pt-3">
+          <h3 className="text-sm font-semibold">Production stage audit history</h3>
+          <p className="text-xs text-muted-foreground">Includes repeat entries saved after the audit-history upgrade. Legacy stage history needs a one-time backfill.</p>
+          {row.EVENT_HISTORY.map((entry, index) => (
+            <div key={`${entry.stage}-${entry.recordedAt || entry.eventDate}-${index}`} className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm">
+              <span className="font-medium">{entry.stage || 'Stage'}</span>
+              <span className="tabular text-muted-foreground">{formatRecordedEvent(entry.eventDate)}</span>
+              {entry.machine && <span className="text-muted-foreground">Machine {entry.machine}</span>}
+              {entry.remarks && <span className="w-full break-words text-xs">{entry.remarks}</span>}
+            </div>
+          ))}
+        </div>
+      )}
       {missing.length > 0 && (
         <div className="border-t border-border pt-3">
           <p className="mb-2 text-xs font-medium text-muted-foreground">
@@ -187,31 +203,25 @@ function Detail({ row }) {
 }
 
 export default function TrackerPage() {
+  const [selected, setSelected] = useState(null);
+  const [status, setStatus] = useState('All');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+  const [searchDraft, setSearchDraft] = useState('');
+  const [search, setSearch] = useState('');
   const query = useQuery({
-    queryKey: ["tracker"],
-    queryFn: productionService.tracker,
+    queryKey: ['tracker', {page,limit,status,search}],
+    queryFn: ({signal}) => productionService.tracker({page,limit,status,search,signal}),
     retry: 1,
     staleTime: 30000,
+    placeholderData: (previous) => previous,
   });
-  const [selected, setSelected] = useState(null);
-  const [status, setStatus] = useState("All");
-  const all = useMemo(
-    () => (query.data ?? []).map(formatTimelineRow),
-    [query.data],
-  );
-  const rows =
-    status === "All" ? all : all.filter((row) => row.STAGE_STATUS === status);
-  const counts = useMemo(
-    () => ({
-      All: all.length,
-      Open: all.filter((r) => r.STAGE_STATUS === "Open").length,
-      "In production": all.filter((r) => r.STAGE_STATUS === "In production")
-        .length,
-      Closed: all.filter((r) => r.STAGE_STATUS === "Closed").length,
-      distinctCards: new Set(all.map((r) => r.JOBCARDNO).filter(Boolean)).size,
-    }),
-    [all],
-  );
+  const rows = useMemo(() => (query.data?.rows ?? []).map(formatTimelineRow), [query.data?.rows]);
+  const counts = query.data?.summary ?? {};
+  const pagination = query.data?.pagination ?? {currentPage:page,limit,totalEntries:0,totalPages:1};
+  const isWaiting = query.isPending || query.isError;
+  const chooseStatus = (next) => {setStatus(next);setPage(1);setSelected(null);};
+  const submitSearch = (event) => {event.preventDefault();setSearch(searchDraft.trim());setPage(1);};
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
@@ -233,15 +243,15 @@ export default function TrackerPage() {
         <Stat
           label="ERP order lines"
           value={
-            query.isError || query.isPending ? "—" : formatNumber(counts.All, 0)
+            isWaiting ? "—" : formatNumber(counts.All, 0)
           }
-          hint={`${counts.distinctCards} distinct job cards`}
+          hint={isWaiting ? '—' : `${formatNumber(counts.distinctCards,0)} distinct job cards`}
           tone="primary"
         />
         <Stat
           label="Open (no stage recorded)"
           value={
-            query.isError || query.isPending
+            isWaiting
               ? "—"
               : formatNumber(counts.Open, 0)
           }
@@ -249,7 +259,7 @@ export default function TrackerPage() {
         <Stat
           label="In production"
           value={
-            query.isError || query.isPending
+            isWaiting
               ? "—"
               : formatNumber(counts["In production"], 0)
           }
@@ -257,7 +267,7 @@ export default function TrackerPage() {
         <Stat
           label="Closed in ERP records"
           value={
-            query.isError || query.isPending
+            isWaiting
               ? "—"
               : formatNumber(counts.Closed, 0)
           }
@@ -275,10 +285,10 @@ export default function TrackerPage() {
                 type="button"
                 key={s}
                 aria-pressed={status === s}
-                onClick={() => setStatus(s)}
+                onClick={() => chooseStatus(s)}
                 className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${status === s ? "border-primary bg-primary-soft text-primary" : "border-border bg-surface text-muted-foreground hover:bg-muted"}`}
               >
-                {s} ({counts[s] ?? 0})
+                {s} ({isWaiting ? '—' : formatNumber(counts[s] ?? 0, 0)})
               </button>
             ))}
           </div>
@@ -288,6 +298,14 @@ export default function TrackerPage() {
           </p>
         </div>
       </Panel>
+      <form onSubmit={submitSearch} className="flex min-w-0 flex-col gap-2 sm:flex-row" role="search">
+        <div className="relative min-w-0 flex-1">
+          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input aria-label="Search all job-card records" placeholder="Search order, job card, lot, fabric or customer" className="pl-9" value={searchDraft} onChange={(event)=>{const next=event.target.value;setSearchDraft(next);if(!next.trim()){setSearch('');setPage(1);setSelected(null);}}} />
+        </div>
+        <Button type="submit" size="sm">Search all records</Button>
+        {(search || searchDraft) && <Button type="button" variant="outline" size="sm" onClick={()=>{setSearchDraft('');setSearch('');setPage(1);setSelected(null);}}>Clear</Button>}
+      </form>
       <DataTable
         rows={rows}
         columns={columns}
@@ -321,13 +339,20 @@ export default function TrackerPage() {
             </span>
           </button>
         )}
-        description="Click any row for a chronological event timeline"
+        description="Click a row for its chronological events. Search and status counts span all matching database rows."
         isLoading={query.isPending}
+        isFetching={query.isFetching}
+        searchable={false}
+        serverPagination={{
+          pagination,
+          disabled:query.isFetching,
+          onPageChange:setPage,
+          onPageSizeChange:(next)=>{setLimit(next);setPage(1);},
+        }}
         error={query.isError ? errorMessage(query.error) : null}
         onRetry={() => query.refetch()}
         onRowClick={setSelected}
         exportName="dyeing-lot-timeline"
-        maxHeight="65vh"
         emptyTitle="No job-card lines"
         emptyDescription="Try All statuses, or upload ERP Open Job Cards to populate the timeline."
       />

@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from 'react-router';
 import { useAuth } from '@/hooks/useAuth';
@@ -17,7 +17,6 @@ import {
 
 import { formatDate, formatNumber, pickString } from "@/utils/format";
 
-import { toIsoDate } from "@/utils/spreadsheet";
 
 import { DataTable } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
@@ -132,87 +131,26 @@ const PO_COLUMNS = [
   },
 ];
 
-function filterPOLines(lines, filters) {
-  const query = filters.search.trim().toUpperCase();
-
-  return lines.filter((row) => {
-    if (filters.from || filters.to) {
-      const date = toIsoDate(poDateValue(row, filters.basis));
-
-      if (!date) return false;
-      if (filters.from && date < filters.from) return false;
-      if (filters.to && date > filters.to) return false;
-    }
-
-    if (filters.status !== "ALL" && knittingStatus(row) !== filters.status) {
-      return false;
-    }
-
-    if (query) {
-      const searchableText = [poNumber(row), pickString(row, "FABRIC_NAME")]
-        .join(" ")
-        .toUpperCase();
-
-      if (!searchableText.includes(query)) return false;
-    }
-
-    return true;
-  });
-}
-
-function calculateStats(lines) {
-  return lines.reduce(
-    (stats, row) => {
-      const status = knittingStatus(row);
-
-      if (Object.hasOwn(stats, status)) {
-        stats[status] += 1;
-      }
-
-      const uom = pickString(row, "REQUIRED_UOM").toUpperCase();
-
-      if (uom === "KG" || uom === "KGS") {
-        const qty = Number(row.REQUIRED_KGS ?? row.REQUIRED_QTY);
-
-        if (Number.isFinite(qty)) {
-          stats.requiredKgs += qty;
-        }
-      }
-
-      return stats;
-    },
-    {
-      CLOSED: 0,
-      OPEN: 0,
-      HOLD: 0,
-      REVIEW: 0,
-      requiredKgs: 0,
-    },
-  );
-}
-
 export default function Unit3POPlannerPage() {
   const [filters, setFilters] = useState(INITIAL_FILTERS);
   const { can } = useAuth();
   const importItem = findNavItem('/imports/knitting-po-planning');
 
-  const { data, isLoading, isFetching, error, refetch } = useQuery({
-    queryKey: ["knitting-po-lines"],
-    queryFn: productionService.knittingPOLines,
-    retry: false,
-  });
-
-  const allLines = useMemo(() => Array.isArray(data) ? data : [], [data]);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
   const deferredFilters = useDeferredValue(filters);
-
-  const filteredLines = useMemo(
-    () => filterPOLines(allLines, deferredFilters),
-    [allLines, deferredFilters],
-  );
-
-  const stats = useMemo(() => calculateStats(filteredLines), [filteredLines]);
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
+    queryKey: ['knitting-po-lines', page, limit, deferredFilters],
+    queryFn: ({signal}) => productionService.knittingPOLines({page,limit,filters:deferredFilters,signal}),
+    retry: false,
+    placeholderData: (previous) => previous,
+  });
+  const filteredLines = data?.rows ?? [];
+  const stats = data?.summary ?? {OPEN:0,CLOSED:0,HOLD:0,REVIEW:0,requiredKgs:0};
+  const pagination = data?.pagination ?? {currentPage:page,limit,totalEntries:0,totalPages:1};
 
   const updateFilter = (key, value) => {
+    setPage(1);
     setFilters((previous) => ({
       ...previous,
       [key]: value,
@@ -221,6 +159,7 @@ export default function Unit3POPlannerPage() {
 
   const clearFilters = () => {
     setFilters({ ...INITIAL_FILTERS });
+    setPage(1);
   };
 
   const hasActiveFilters = Boolean(
@@ -323,7 +262,7 @@ export default function Unit3POPlannerPage() {
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
               <CalendarDays className="size-4" />
-              {filteredLines.length.toLocaleString("en-IN")} PO Lines
+              {(pagination.totalEntries ?? 0).toLocaleString("en-IN")} PO Lines
             </span>
 
             <span>
@@ -370,6 +309,8 @@ export default function Unit3POPlannerPage() {
           title="Unit-3 PO Planner Lines"
           description="Read-only status from the latest Planner data"
           isLoading={isLoading}
+          isFetching={isFetching}
+          serverPagination={{pagination,disabled:isFetching,onPageChange:setPage,onPageSizeChange:(next)=>{setLimit(next);setPage(1);}}}
           error={error ? errorMessage(error) : null}
           onRetry={() => void refetch()}
           searchable={false}

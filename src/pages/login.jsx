@@ -105,7 +105,7 @@ export function LoginPage() {
     });
     const year = new Date().getFullYear();
 
-    return (<main className="flex min-h-dvh flex-col lg:flex-row">
+    return (<main className="flex h-dvh min-h-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain lg:flex-row">
       <BrandPanel />
 
       <section className="flex flex-1 flex-col">

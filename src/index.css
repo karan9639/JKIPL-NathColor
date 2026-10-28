@@ -50,7 +50,17 @@
 }
 
 @layer base {
-  #root { min-height: 100dvh; }
+  /* The document never scrolls while the SPA is mounted.
+     AppShell owns the scrollable main area; the sidebar scrolls separately.
+     Prevents browser scroll restoration from pushing the header above view. */
+  html, body, #root {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+  #root { isolation: isolate; }
+  html, body { overscroll-behavior: none; }
   main, section, form, fieldset { min-width: 0; }
   body { margin: 0; }
   input, select, textarea { min-width: 0; max-width: 100%; }
@@ -80,5 +90,60 @@
   }
   body {
     background: white;
+  }
+}
+
+/* Nested scroll regions never expand their containing flex layout.
+   Page and sidebar scrolling remain independent at any sidebar width. */
+.app-shell-root {
+  height: 100vh; /* fallback for browsers without dynamic viewport units */
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+.app-content-scroll {
+  min-height: 0;
+  min-width: 0;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  overflow-anchor: none;
+  scroll-behavior: auto;
+}
+/* For content-short routes there is no document scrollbar or artificial page height. */
+.app-shell-root > div { min-height: 0; min-width: 0; }
+/* A flex child may otherwise shrink a data table to only two or three rows.
+   Route content keeps its natural height; the application main region scrolls. */
+.app-content-scroll > * { flex-shrink: 0; }
+
+@media print {
+  html, body, #root, .app-shell-root, .app-content-scroll {
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+  .app-content-scroll { padding: 0 !important; }
+}
+
+/* Shared Order-Tracker-style table viewport used by every ERP DataTable.
+   Table rows scroll inside the card; the table toolbar and single pager stay
+   outside its scroll region. Unlike a fixed height, max-height never adds
+   empty space to tables with only a few rows. */
+.erp-data-table-viewport {
+  max-height: min(65vh, 720px);
+  max-height: min(65dvh, 720px);
+  overflow: auto;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+@media (max-width: 639px) {
+  .erp-data-table-viewport {
+    max-height: min(55dvh, 600px);
+  }
+}
+@media print {
+  .erp-data-table-viewport {
+    max-height: none !important;
+    overflow: visible !important;
   }
 }

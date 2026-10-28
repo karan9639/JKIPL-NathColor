@@ -25,6 +25,6 @@ export default function RecordsPage() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
         {KEYS.map(([key, label]) => (<Stat key={key} label={`${label} (period)`} value={query.isLoading || query.isError ? '—' : rows.reduce((s, r) => s + toNumber(r[key]), 0).toLocaleString('en-IN')}/>))}
       </div>
-      <DataTable rows={rows} columns={columns} isLoading={query.isLoading} error={query.error ? errorMessage(query.error) : null} onRetry={() => query.refetch()} exportName="daily-records" searchable={false}/>
+      <DataTable title="Daily production records" rows={rows} columns={columns} isLoading={query.isLoading} error={query.error ? errorMessage(query.error) : null} onRetry={() => query.refetch()} exportName="daily-records" searchable={false}/>
     </>);
 }

@@ -37,7 +37,13 @@ export function parseClipboardTable(text) {
 }
 /** Extract tables from an ERP HTML export; returns each <tr> as an array of <td> texts. */
 export async function readHtmlTables(file) {
-    const text = await file.text();
+    // ERP/WPS may save HTML spreadsheets in UTF-8, UTF-16LE or UTF-16BE.
+    // File.text() always assumes UTF-8 and corrupts the two UTF-16 variants.
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const utf16le = bytes[0] === 0xff && bytes[1] === 0xfe;
+    const utf16be = bytes[0] === 0xfe && bytes[1] === 0xff;
+    const encoding = utf16le ? 'utf-16le' : utf16be ? 'utf-16be' : 'utf-8';
+    const text = new TextDecoder(encoding).decode(bytes);
     const doc = new DOMParser().parseFromString(text, 'text/html');
     return Array.from(doc.querySelectorAll('table')).map((table) => Array.from(table.querySelectorAll('tr')).map((tr) => Array.from(tr.querySelectorAll('td, th')).map((td) => (td.textContent ?? '').replace(/\s+/g, ' ').trim())));
 }

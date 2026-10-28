@@ -196,7 +196,7 @@ export default function OrdersPage({ menuKey }) {
           <Input
             id="order-search"
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => {const next=e.target.value;setDraft(next);if(!next.trim()){setSearch('');setOrderBookPage(1);setSelected(null);}}}
             placeholder="e.g. RAYMOND NAVY PIQUE"
             className="h-11 pl-9"
           />
@@ -312,6 +312,7 @@ export default function OrdersPage({ menuKey }) {
       )}
 
       <DataTable
+        title="Order book records"
         rows={rows}
         columns={columns}
         searchable={!isOrderBook}

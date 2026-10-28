@@ -26,7 +26,7 @@ test('All Orders uses one server pager, not a second report pager', () => {
   const service = readFileSync(new URL('../src/services/orders.service.js', import.meta.url), 'utf8');
   assert.match(page, /serverPagination=\{/);
   assert.doesNotMatch(page, /<ImportReportPagination/);
-  assert.match(page, /queryKey: \['order-book', orderBookPage, orderBookLimit, search, orderBookSort\]/);
+  assert.match(page.replace(/\s+/g, ' '), /queryKey: \[ ['\"]order-book['\"], orderBookPage, orderBookLimit, search, orderBookSort,? \]/);
   assert.match(table, /const pageRows = serverPagination \? visible :/);
   assert.match(service, /limit = 50/);
   assert.match(service, /params\.sortBy = sorting\.key/);

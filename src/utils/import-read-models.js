@@ -1,3 +1,4 @@
+import { isAllPageSize } from './all-page-size.js';
 /**
  * Adapt the authenticated Express GET /dyeing/fetch-dyeingprogram and
  * GET /yarn/fetch-yarnstock response bodies without losing pagination.
@@ -12,8 +13,8 @@ export function readImportPage(response, collectionKey, requestedPage = 1, limit
     const meta = payload.pagination ?? {};
     const page = Math.max(1, Number(meta.currentPage ?? requestedPage) || 1);
     const totalEntries = Math.max(0, Number(meta.totalEntries ?? records.length) || 0);
-    const pageSize = Math.min(100, Math.max(1, Number(meta.limit ?? limit) || 100));
-    const totalPages = Math.max(1, Number(meta.totalPages ?? Math.ceil(totalEntries / pageSize)) || 1);
+    const pageSize = isAllPageSize(meta.limit ?? limit) ? 'all' : Math.min(100, Math.max(1, Number(meta.limit ?? limit) || 100));
+    const totalPages = isAllPageSize(pageSize) ? 1 : Math.max(1, Number(meta.totalPages ?? Math.ceil(totalEntries / pageSize)) || 1);
     return {
         rows: records,
         summary: payload.summary ?? null,
