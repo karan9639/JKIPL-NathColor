@@ -20,9 +20,9 @@ test('mobile login has a fixed visible brand header and independent scrolling', 
   assert.match(source, /await login\(values\.email, values\.password, values\.remember\)/);
 });
 
-test('existing direct Railway API environment and Vercel SPA routing are preserved', () => {
+test('same-site custom Railway API and Vercel SPA routing are preserved', () => {
   const env = read('../.env.production');
-  assert.match(env, /VITE_API_BASE_URL=https:\/\/nathcolorbackend-production\.up\.railway\.app\/api\/v1/);
+  assert.match(env, /VITE_API_BASE_URL=https:\/\/api\.jkipl\.com\/api\/v1/);
   const vercel = read('../vercel.json');
   assert.ok(!vercel.includes('nathcolorbackend-production.up.railway.app'), 'Vercel API proxy should not be re-added');
 });
