@@ -16,18 +16,25 @@ export function AuthProvider({ children }) {
     const { username, user, isLoggingOut } = useSelector((state) => state.auth);
     const [ready, setReady] = useState(false);
 
+    // A 401 means the API no longer recognizes our session. Do not call the
+    // protected logout endpoint in response to 401: that would generate another
+    // 401 and mask the actual cookie/session problem.
+    const clearLocalSession = useCallback(() => {
+        session.clear();
+        queryClient.clear();
+        dispatch(signedOut());
+    }, [queryClient, dispatch]);
+
     const logout = useCallback(async () => {
         dispatch(logoutStarted());
         try {
             await logoutUser();
         } catch {
-            // Still clear the local session if the network/API is unavailable.
+            // Clear local state even if the server session has already expired.
         } finally {
-            session.clear();
-            queryClient.clear();
-            dispatch(signedOut());
+            clearLocalSession();
         }
-    }, [queryClient, dispatch]);
+    }, [clearLocalSession, dispatch]);
 
     useEffect(() => {
         let active = true;
@@ -49,9 +56,9 @@ export function AuthProvider({ children }) {
 
     useEffect(() => {
         localStorage.removeItem('nc.device_uuid');
-        setUnauthorizedHandler(logout);
+        setUnauthorizedHandler(clearLocalSession);
         return () => setUnauthorizedHandler(null);
-    }, [logout]);
+    }, [clearLocalSession]);
 
     const login = useCallback(async (email, password, remember) => {
         const normalizedEmail = email.trim().toLowerCase();
@@ -63,7 +70,26 @@ export function AuthProvider({ children }) {
             throw new Error(response?.message ?? 'Invalid email or password.');
         }
 
-        const account = userFromLoginResponse(response, normalizedEmail);
+        // This API authenticates by HttpOnly cookies, not a token in JSON.
+        // Validate cookie persistence before treating a 200 login as a session.
+        // This catches browser-blocked third-party cookies immediately.
+        let verifiedResponse;
+        try {
+            verifiedResponse = await http.get('/user/me');
+        } catch (error) {
+            if (error?.status === 401) {
+                throw new Error(
+                    'Login accepted, but the browser did not send an authenticated session. ' +
+                    'Check Set-Cookie/Cookies in DevTools. Prefer api.jkipl.com ' +
+                    'pointing directly to Railway to avoid third-party-cookie restrictions.'
+                );
+            }
+            throw error;
+        }
+        const account = userFromLoginResponse(
+            verifiedResponse.data,
+            normalizedEmail
+        );
         const token = response.token ?? response.accessToken ??
             response.data?.token ?? response.data?.accessToken ?? null;
         const menuOptions = response.menuoptionslist ?? response.data?.menuoptionslist ?? '';
