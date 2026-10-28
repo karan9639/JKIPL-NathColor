@@ -1,25 +1,23 @@
-function readRequired(key) {
-    const value = String(import.meta.env[key] ?? '').trim();
-    if (!value) {
-        throw new Error(`Missing environment variable ${key}. Copy .env.example to .env and set it.`);
-    }
-    return value;
+const trimSlashes = (value) => String(value ?? '').trim().replace(/\/+$/, '');
+
+// Static import.meta.env references are replaced by Vite during the build.
+const apiBaseUrl = trimSlashes(import.meta.env.VITE_API_BASE_URL);
+const legacyApiBaseUrl = trimSlashes(import.meta.env.VITE_LEGACY_API_BASE_URL) || apiBaseUrl;
+const timeoutMs = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 60000);
+
+if (!apiBaseUrl) {
+  throw new Error('Missing VITE_API_BASE_URL. Configure the frontend Vercel environment and redeploy.');
 }
-
-const trimSlashes = (value) => value.replace(/\/+$/, '');
-
-const apiBaseUrl = trimSlashes(readRequired('VITE_API_BASE_URL'));
-const timeoutMs = Number(readRequired('VITE_API_TIMEOUT_MS'));
-
 if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-    throw new Error('VITE_API_TIMEOUT_MS must be a positive number of milliseconds.');
+  throw new Error('VITE_API_TIMEOUT_MS must be a positive number of milliseconds.');
 }
 
 export const config = {
-    apiBaseUrl,
-    legacyApiBaseUrl: trimSlashes(String(import.meta.env.VITE_LEGACY_API_BASE_URL ?? '').trim()) || apiBaseUrl,
-    useMockApi: false,
-    timeoutMs,
-    appName: 'Nathcolor+',
+  apiBaseUrl,
+  legacyApiBaseUrl,
+  useMockApi: false,
+  timeoutMs,
+  appName: 'Nathcolor+',
 };
-export const JET_NUMBERS = Array.from({ length: 30 }, (_, i) => i + 1);
+
+export const JET_NUMBERS = Array.from({ length: 30 }, (_, index) => index + 1);
