@@ -18,5 +18,6 @@ test('Vercel frontend uses direct railway API, not its own api rewrite', () => {
 test('login path composes with configured Railway URL and keeps credentials', () => {
   assert.match(read('../src/services/auth/auth.service.js'), /http\.post\('\/user\/login'/);
   assert.match(read('../src/services/http/client.js'), /withCredentials:\s*true/);
-  assert.match(read('../vite.config.js'), /isDirectApi/);
+  assert.match(read('../vite.config.js'), /normalizeApiBaseUrl/);
+  assert.doesNotMatch(read('../vite.config.js'), /proxy:\s*\{/);
 });

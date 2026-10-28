@@ -31,7 +31,19 @@ function makeClient(baseURL) {
         if (cfg.data instanceof FormData) cfg.headers.delete('Content-Type');
         return cfg;
     });
-    client.interceptors.response.use((res) => res, (error) => {
+    client.interceptors.response.use((res) => {
+        const contentType = String(res.headers?.['content-type'] || '');
+        const body = res.data;
+        if (/text\/html/i.test(contentType) ||
+            (typeof body === 'string' && /^\s*<!doctype html|^\s*<html[\s>]/i.test(body))) {
+            throw new ApiError(
+                'The API returned an HTML page instead of JSON. Check VITE_API_BASE_URL; API requests must go to the Express backend, not localhost:3000 or app.jkipl.com.',
+                502,
+                'INVALID_API_RESPONSE',
+            );
+        }
+        return res;
+    }, (error) => {
         const status = error.response?.status;
         const url = error.config?.url ?? '';
         // Never treat a failed login as an expired authenticated session.

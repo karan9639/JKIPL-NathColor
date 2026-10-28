@@ -145,9 +145,22 @@ export default function Unit3POPlannerPage() {
     retry: false,
     placeholderData: (previous) => previous,
   });
-  const filteredLines = data?.rows ?? [];
-  const stats = data?.summary ?? {OPEN:0,CLOSED:0,HOLD:0,REVIEW:0,requiredKgs:0};
-  const pagination = data?.pagination ?? {currentPage:page,limit,totalEntries:0,totalPages:1};
+  const filteredLines = Array.isArray(data?.rows) ? data.rows : [];
+  const rawStats = data?.summary ?? {};
+  const stats = {
+    OPEN: Number(rawStats.OPEN) || 0,
+    CLOSED: Number(rawStats.CLOSED) || 0,
+    HOLD: Number(rawStats.HOLD) || 0,
+    REVIEW: Number(rawStats.REVIEW) || 0,
+    requiredKgs: Number(rawStats.requiredKgs) || 0,
+  };
+  const pagination = {
+    currentPage: page,
+    limit,
+    totalEntries: 0,
+    totalPages: 1,
+    ...(data?.pagination ?? {}),
+  };
 
   const updateFilter = (key, value) => {
     setPage(1);

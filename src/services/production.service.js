@@ -29,7 +29,11 @@ export const productionService = {
         const {data}=await legacyHttp.get('/knitting/po-lines',{
             params:{paged:1,page,limit,basis:filters.basis||'PO_DATE',from:filters.from||'',to:filters.to||'',search:filters.search||'',status:filters.status||'ALL'},signal,
         });
-        return data?.data??{rows:[],summary:{},pagination:{currentPage:page,limit,totalEntries:0,totalPages:1}};
+        const payload = data?.data;
+        if (!Array.isArray(payload?.rows) || !payload?.pagination || typeof payload?.summary !== 'object') {
+            throw new Error('Incompatible Unit-3 PO Planner API response. Confirm the Railway backend supports GET /api/v1/knitting/po-lines?paged=1.');
+        }
+        return payload;
     },
     async records() {
         const { data } = await legacyHttp.get('/vrecords');

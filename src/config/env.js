@@ -1,13 +1,13 @@
-const trimSlashes = (value) => String(value ?? '').trim().replace(/\/+$/, '');
+import { normalizeApiBaseUrl } from './api-url.js';
 
-// Static import.meta.env references are replaced by Vite during the build.
-const apiBaseUrl = trimSlashes(import.meta.env.VITE_API_BASE_URL);
-const legacyApiBaseUrl = trimSlashes(import.meta.env.VITE_LEGACY_API_BASE_URL) || apiBaseUrl;
+// Vite replaces these STATIC references at build time. Environment-specific
+// .env.development and .env.production files provide the correct backend host.
+export const apiBaseUrl = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
+export const legacyApiBaseUrl = normalizeApiBaseUrl(
+  import.meta.env.VITE_LEGACY_API_BASE_URL || import.meta.env.VITE_API_BASE_URL,
+  'VITE_LEGACY_API_BASE_URL',
+);
 const timeoutMs = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 60000);
-
-if (!apiBaseUrl) {
-  throw new Error('Missing VITE_API_BASE_URL. Configure the frontend Vercel environment and redeploy.');
-}
 if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
   throw new Error('VITE_API_TIMEOUT_MS must be a positive number of milliseconds.');
 }
@@ -19,5 +19,4 @@ export const config = {
   timeoutMs,
   appName: 'Nathcolor+',
 };
-
 export const JET_NUMBERS = Array.from({ length: 30 }, (_, index) => index + 1);
