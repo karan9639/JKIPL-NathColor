@@ -2,7 +2,7 @@ import { AlertTriangle, Inbox, Loader2 } from 'lucide-react';
 import { cn } from '@/utils/format';
 import { Button } from './button';
 export function Panel({ className, children }) {
-    return <section className={cn('min-w-0 rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgb(23_32_26/0.03)]', className)}>{children}</section>;
+    return <section className={cn('min-w-0 rounded-xl border border-border bg-surface shadow-[0_3px_16px_rgb(88_26_44/0.035)]', className)}>{children}</section>;
 }
 export function PanelHeader({ title, description, actions }) {
     return (<div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -23,7 +23,7 @@ export function PageHeader({ title, description, actions }) {
     </header>);
 }
 export function Stat({ label, value, tone = 'default', hint }) {
-    return (<div className={cn('min-w-0 rounded-xl border px-3 py-4 sm:px-4', tone === 'primary' && 'border-primary/20 bg-primary-soft', tone === 'accent' && 'border-accent/20 bg-accent-soft', tone === 'default' && 'border-border bg-surface')}>
+    return (<div className={cn('min-w-0 rounded-xl border px-3 py-4 sm:px-4', tone === 'primary' && 'border-primary/15 bg-primary-soft', tone === 'accent' && 'border-accent/20 bg-accent-soft', tone === 'default' && 'border-border bg-surface')}>
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className={cn('tabular mt-1 text-xl font-semibold', tone === 'primary' && 'text-primary', tone === 'accent' && 'text-accent')}>{value}</p>
       {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}

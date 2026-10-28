@@ -4,28 +4,30 @@
   --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 
-  --color-background: #f6f7f4;
+  --color-background: #fff9f9;
   --color-surface: #ffffff;
-  --color-foreground: #17201a;
-  --color-muted: #eef0ea;
-  --color-muted-foreground: #5d6a60;
-  --color-border: #dde2d8;
+  --color-foreground: #291f26;
+  --color-muted: #f8f0f1;
+  --color-muted-foreground: #665a62;
+  --color-border: #e9dfe1;
 
-  --color-primary: #14532d;
-  --color-primary-hover: #0f3f22;
+  --color-primary: #b5293b;
+  --color-primary-hover: #901f30;
   --color-primary-foreground: #ffffff;
-  --color-primary-soft: #e3efe6;
+  --color-primary-soft: #ffeaec;
 
-  --color-brand: #e11d2a;
-  --color-brand-soft: #fde8ea;
+  --color-brand: #fc5158;
+  --color-brand-soft: #fff0f0;
+  --color-rose-mist: #dbb4b4;
+  --color-rose-ink: #633744;
 
   --color-accent: #b45309;
   --color-accent-soft: #fdf1e2;
 
-  --color-danger: #b91c1c;
-  --color-danger-soft: #fdeaea;
-  --color-success: #15803d;
-  --color-success-soft: #e5f4ea;
+  --color-danger: #b42339;
+  --color-danger-soft: #fff0f0;
+  --color-success: #187449;
+  --color-success-soft: #e8f5ee;
 }
 
 @layer base {
@@ -147,3 +149,63 @@
     overflow: visible !important;
   }
 }
+
+/* NathColor+ premium rose design system — presentation only. */
+@layer base {
+  body { background: var(--color-background); color: var(--color-foreground); }
+  a, button, input, textarea, select { -webkit-tap-highlight-color: transparent; }
+  :focus-visible { outline-color: var(--color-primary); outline-offset: 3px; }
+  input[type="checkbox"], input[type="radio"] { accent-color: var(--color-primary); }
+}
+
+.erp-sidebar {
+  background: linear-gradient(180deg, #ffffff 0%, #fffafa 72%, #fff6f7 100%);
+  box-shadow: 2px 0 20px rgb(94 32 44 / 0.025);
+}
+.erp-topbar {
+  background: rgb(255 255 255 / .97);
+  box-shadow: 0 1px 8px rgb(81 22 40 / .025);
+}
+.erp-topbar::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 2px;
+  background: linear-gradient(90deg, #fc5158 0%, #dbb4b4 29%, transparent 75%);
+  opacity: .75;
+  pointer-events: none;
+}
+.erp-nav-link[aria-current='page'] {
+  box-shadow: inset 3px 0 0 var(--color-brand);
+}
+.erp-data-table-viewport table thead {
+  background-color: #fbf2f3;
+}
+.erp-data-table-viewport table tbody tr:hover {
+  background-color: #fff0f1;
+}
+.erp-data-table-viewport table tbody tr:nth-child(2n) {
+  background-color: rgb(250 241 242 / .43);
+}
+.erp-data-table-viewport table tbody tr:nth-child(2n):hover {
+  background-color: #fff0f1;
+}
+.auth-brand-panel {
+  background: radial-gradient(circle at 12% 80%, rgb(252 81 88 / .23), transparent 45%),
+              radial-gradient(circle at 90% 12%, rgb(219 180 180 / .16), transparent 34%),
+              linear-gradient(155deg, #612431 0%, #421d2b 55%, #341824 100%);
+}
+.auth-form-panel {
+  background: radial-gradient(ellipse at 88% 8%, rgb(252 81 88 / .075), transparent 42%),
+              linear-gradient(145deg, #fff9f9, #fff6f7 60%, #fdf7f8);
+}
+.auth-form-card {
+  box-shadow: 0 18px 50px rgb(88 26 44 / .08), 0 3px 10px rgb(88 26 44 / .025);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .erp-nav-link, .erp-action-button { transition: background-color .18s ease, color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+  .erp-action-button:not(:disabled):active { transform: translateY(1px); }
+}
+
+/* Login owns its vertical scrolling because the ERP document/root is locked. */
+.auth-page-scroll { -webkit-overflow-scrolling: touch; scrollbar-gutter: stable; }

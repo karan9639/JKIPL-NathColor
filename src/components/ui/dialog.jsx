@@ -5,7 +5,7 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
     return (<RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
         <RadixDialog.Overlay className="fixed inset-0 z-50 bg-foreground/40 data-[state=open]:animate-in"/>
-        <RadixDialog.Content className={cn('fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100vw-3rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border border-border bg-surface shadow-xl', className)} {...(description ? {} : { 'aria-describedby': undefined })}>
+        <RadixDialog.Content className={cn('fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100vw-3rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl border border-border bg-surface shadow-[0_22px_75px_rgb(55_20_33/0.16)]', className)} {...(description ? {} : { 'aria-describedby': undefined })}>
           <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
             <div>
               <RadixDialog.Title className="text-base font-semibold">{title}</RadixDialog.Title>

@@ -1,7 +1,7 @@
 import { createContext, forwardRef, useContext, useId } from 'react';
 import { cn } from '@/utils/format';
 const FieldContext = createContext(null);
-const control = 'w-full min-w-0 rounded-lg border border-border bg-surface px-3 text-foreground placeholder:text-muted-foreground/70 transition-colors duration-150 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground aria-[invalid=true]:border-danger';
+const control = 'w-full min-w-0 rounded-lg border border-border bg-surface px-3 shadow-[0_1px_2px_rgb(91_28_42/0.015)] text-foreground placeholder:text-muted-foreground/70 transition-colors duration-150 focus:border-primary focus:outline-none focus:ring-2 focus:ring-brand/20 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground aria-[invalid=true]:border-danger';
 function useFieldProps(props) {
   const field = useContext(FieldContext);
   if (!field || props['aria-label'] || (props.id && props.id !== field.id)) return props;

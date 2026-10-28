@@ -14,8 +14,8 @@ import { errorMessage } from '@/services/http/client';
 import { Badge, PageHeader, Panel, PanelHeader, Stat, LoadingState, EmptyState, ErrorState } from '@/components/ui/panel';
 const SERIES = [
     { key: 'Jet', color: 'var(--color-primary)' },
-    { key: 'HeatS', color: 'var(--color-accent)' },
-    { key: 'Finish', color: '#64748b' },
+    { key: 'HeatS', color: 'var(--color-brand)' },
+    { key: 'Finish', color: '#956575' },
 ];
 function freshness(value) {
     const date = parseLooseDate(value);
