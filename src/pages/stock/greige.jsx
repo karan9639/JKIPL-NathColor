@@ -26,9 +26,30 @@ const u2Columns = [
   qtyColumn('currentStock','Current Stock'),
   {key:'updatedAt',label:'Imported At',render:r=>r.updatedAt?formatDate(r.updatedAt,true):'—'},
 ];
+// The currently deployed API returns 404 when no stock has been imported.
+// Only that specific no-records response should become an empty table.
+// Other 404 responses and genuine request failures must still show ErrorState.
+function isNoStockRecordsError(error) {
+  const status = Number(error?.status ?? error?.response?.status);
+  const message = String(error?.message ?? error?.response?.data?.message ?? '');
+  return status === 404 && /no (?:u[23]\s+)?greige stock records found for the selected search/i.test(message);
+}
+
+async function loadGreigeStock(unit) {
+  try {
+    const result = unit === 'u3'
+      ? await greigeStockService.fetchAllU3()
+      : await greigeStockService.fetchAllU2();
+    return Array.isArray(result) ? result : [];
+  } catch (error) {
+    if (isNoStockRecordsError(error)) return [];
+    throw error;
+  }
+}
+
 export default function GreigeStockPage() {
   const [unit,setUnit]=useState('u2');
-  const query=useQuery({queryKey:['greige-stock',unit],queryFn:()=>unit==='u3'?greigeStockService.fetchAllU3():greigeStockService.fetchAllU2(),staleTime:30000,retry:1});
+  const query=useQuery({queryKey:['greige-stock',unit],queryFn:()=>loadGreigeStock(unit),staleTime:30000,retry:1});
   const rows=query.data??[];
   const values=rows.map(r=>unit==='u3'?r.closing?.qtyKgs:r.currentStock).filter(value=>value!=null && value!=='').map(toNumber);
   const total=values.reduce((a,b)=>a+b,0);
