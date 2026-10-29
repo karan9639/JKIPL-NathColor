@@ -1,5 +1,6 @@
 import { loadAllStockPages } from './stock-pagination.js';
 import { http } from '@/services/http/client';
+import { loadGreigeSummary } from '@/utils/greige-stock-summary';
 
 function extractRows(response, keys) {
     const payload = response?.data ?? response;
@@ -117,6 +118,15 @@ export const greigeStockService = {
             pagination: payload.pagination,
             summary: payload.summary ?? null,
         };
+    },
+    // Existing Railway API returns pagination + stocks without KPI summaries.
+    // Load its 100-row pages once per filter, while the DataTable keeps limit=50.
+    fetchSummary(unit, { search = '' } = {}, signal) {
+        return loadGreigeSummary(
+            (params) => this.fetchPage(unit, params, signal),
+            unit,
+            { search },
+        );
     },
     async fetchU2(params = {}) {
         const { data } = await http.get('/u2greige/fetch-stock', { params });
