@@ -7,6 +7,7 @@ import { loginUser, logoutUser } from '@/services/auth/auth.service';
 import { session } from '@/services/auth/session';
 import { canAccess } from '@/constants/permissions';
 import { isSuccessfulLoginResponse, userFromLoginResponse } from '@/services/auth/identity';
+import { authenticatedUserFromMe, sessionCookieHelp } from '@/services/auth/session-verification';
 
 export const AuthContext = createContext(null);
 
@@ -63,7 +64,16 @@ export function AuthProvider({ children }) {
             throw new Error(response?.message ?? 'Invalid email or password.');
         }
 
-        const account = userFromLoginResponse(response, normalizedEmail);
+        // Successful credentials do not prove that the browser can send the cookie.
+        // Verify the first-party session before navigating to the dashboard.
+        let account;
+        try {
+            const { data: meResponse } = await http.get('/user/me');
+            account = authenticatedUserFromMe(meResponse, normalizedEmail);
+        } catch (error) {
+            session.clear();
+            throw new Error(sessionCookieHelp(error) || error.message || 'Unable to verify login session.');
+        }
         const token = response.token ?? response.accessToken ??
             response.data?.token ?? response.data?.accessToken ?? null;
         const menuOptions = response.menuoptionslist ?? response.data?.menuoptionslist ?? '';

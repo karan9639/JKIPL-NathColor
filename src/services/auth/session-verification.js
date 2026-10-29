@@ -17,7 +17,7 @@ export function authenticatedUserFromMe(response, fallbackEmail = '') {
 
 export function sessionCookieHelp(error) {
   if (error?.status === 401) {
-    return 'Login credentials were accepted, but the browser did not return an authenticated session. The API cookie may be blocked. Use the same-site Railway API domain (api.jkipl.com), then sign in again.';
+    return 'Login credentials were accepted, but the browser did not return an authenticated session. The authentication cookie was not returned. Verify Vercel forwards /api/v1/* to Railway and VITE_API_BASE_URL=/api/v1, then sign in again.';
   }
   return null;
 }

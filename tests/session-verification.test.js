@@ -11,6 +11,6 @@ test('GET /user/me requires an authenticated user identity', () => {
 });
 
 test('unauthorized /user/me after accepted login is explained as cookie failure', () => {
-  assert.match(sessionCookieHelp({status:401}),/cookie may be blocked/i);
+  assert.match(sessionCookieHelp({status:401}),/authentication cookie was not returned/i);
   assert.equal(sessionCookieHelp({status:500}),null);
 });

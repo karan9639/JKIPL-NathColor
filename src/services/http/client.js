@@ -37,7 +37,7 @@ function makeClient(baseURL) {
         if (/text\/html/i.test(contentType) ||
             (typeof body === 'string' && /^\s*<!doctype html|^\s*<html[\s>]/i.test(body))) {
             throw new ApiError(
-                'The API returned an HTML page instead of JSON. Check VITE_API_BASE_URL; API requests must go to the Express backend, not localhost:3000 or app.jkipl.com.',
+                'The API returned an HTML page instead of JSON. Check the /api/v1 proxy in vite.config.js or vercel.json; API responses must come from the Express backend.',
                 502,
                 'INVALID_API_RESPONSE',
             );
