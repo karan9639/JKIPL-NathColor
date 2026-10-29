@@ -6,8 +6,7 @@ import { http, setUnauthorizedHandler } from '@/services/http/client';
 import { loginUser, logoutUser } from '@/services/auth/auth.service';
 import { session } from '@/services/auth/session';
 import { canAccess } from '@/constants/permissions';
-import { isSuccessfulLoginResponse } from '@/services/auth/identity';
-import { authenticatedUserFromMe, sessionCookieHelp } from '@/services/auth/session-verification';
+import { isSuccessfulLoginResponse, userFromLoginResponse } from '@/services/auth/identity';
 
 export const AuthContext = createContext(null);
 
@@ -37,7 +36,7 @@ export function AuthProvider({ children }) {
             try {
                 const { data } = await http.get('/user/me');
                 if (!active) return;
-                const account = authenticatedUserFromMe(data, session.getUsername());
+                const account = userFromLoginResponse(data, session.getUsername());
                 session.save(null, account.username, '', account);
                 dispatch(signedIn({ username: account.username, user: account }));
             } catch {
@@ -56,34 +55,22 @@ export function AuthProvider({ children }) {
 
     const login = useCallback(async (email, password, remember) => {
         const normalizedEmail = email.trim().toLowerCase();
-        const { data: loginResponse } = await loginUser({ email: normalizedEmail, password });
-
-        if (!isSuccessfulLoginResponse(loginResponse)) {
-            throw new Error(loginResponse?.message || 'Invalid email or password.');
+        const { data: response } = await loginUser({ email: normalizedEmail, password });
+        // Axios has already removed its HTTP wrapper. The backend's payload
+        // is { statusCode, success, data: { foundUser: { role, email, ... } } }.
+        const isSuccess = isSuccessfulLoginResponse(response);
+        if (!isSuccess) {
+            throw new Error(response?.message ?? 'Invalid email or password.');
         }
 
-        // Login's 200 response is not enough: third-party cookie restrictions
-        // can discard Set-Cookie before subsequent authenticated requests.
-        // Validate the cookie against the protected endpoint FIRST.
-        let account;
-        try {
-            const { data: meResponse } = await http.get('/user/me', {
-                headers: { 'Cache-Control': 'no-store' },
-            });
-            account = authenticatedUserFromMe(meResponse, normalizedEmail);
-        } catch (error) {
-            session.clear();
-            queryClient.clear();
-            dispatch(signedOut());
-            const help = sessionCookieHelp(error);
-            if (help) throw new Error(help);
-            throw error;
-        }
+        const account = userFromLoginResponse(response, normalizedEmail);
+        const token = response.token ?? response.accessToken ??
+            response.data?.token ?? response.data?.accessToken ?? null;
+        const menuOptions = response.menuoptionslist ?? response.data?.menuoptionslist ?? '';
 
-        // Only now is the authenticated session genuinely usable.
-        session.save(null, account.username, '', account);
+        session.save(token, account.username, menuOptions, account);
         session.setRememberedEmail(remember ? normalizedEmail : null);
-        queryClient.clear();
+        queryClient.clear(); // Clear any data from the previously logged-in account.
         dispatch(signedIn({ username: account.username, user: account }));
     }, [dispatch, queryClient]);
 
