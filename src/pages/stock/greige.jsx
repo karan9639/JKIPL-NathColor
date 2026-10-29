@@ -9,7 +9,6 @@ import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/field';
 import { PageHeader, Stat } from '@/components/ui/panel';
-import { EMPTY_GREIGE_SUMMARY } from '@/utils/greige-stock-summary';
 
 // Preserve the ERP U-1 ledger columns used for the physical Unit-3 stock.
 const qtyColumn = (key, label) => ({
@@ -43,7 +42,7 @@ const u2Columns = [
   { key: 'updatedAt', label: 'Imported At', render: (row) => row.updatedAt ? formatDate(row.updatedAt, true) : '—' },
 ];
 
-const EMPTY_SUMMARY = EMPTY_GREIGE_SUMMARY;
+const EMPTY_SUMMARY = { qualities: 0, totalStock: 0, outOfStock: 0, below500: 0 };
 
 // Backward compatibility only: older Railway builds returned 404 on a valid
 // empty report. Never swallow authentication, transport, or other 404 failures.
@@ -78,6 +77,7 @@ export default function GreigeStockPage() {
   const [unit, setUnit] = useState('u2');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
+  const [sort, setSort] = useState(null);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [exporting, setExporting] = useState(false);
@@ -95,9 +95,9 @@ export default function GreigeStockPage() {
     return () => clearTimeout(timeoutId);
   }, [searchInput, search]);
 
-  const params = { page, limit, search };
+  const params = { page, limit, search, sortBy: sort?.key, sortDir: sort?.dir };
   const query = useQuery({
-    queryKey: ['greige-stock', unit, page, limit, search],
+    queryKey: ['greige-stock', unit, page, limit, search, sort?.key, sort?.dir],
     queryFn: ({ signal }) => fetchStockPage(unit, params, signal),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
@@ -105,33 +105,8 @@ export default function GreigeStockPage() {
   });
 
   const rows = query.data?.rows ?? [];
+  const summary = query.data?.summary;
   const pagination = query.data?.pagination;
-  const hasServerSummary = !!query.data?.summary;
-  const emptyReport = query.isSuccess && Number(pagination?.totalEntries) === 0;
-
-  // Existing backend returns only stocks + pagination. Calculate all-record
-  // KPIs in a separately cached query; page navigation never triggers it.
-  // If a future backend supplies summary, skip these additional requests.
-  const summaryQuery = useQuery({
-    queryKey: [
-      'greige-stock-summary', unit, search,
-      rows[0]?.snapshotId ?? null, pagination?.totalEntries ?? null,
-    ],
-    queryFn: ({ signal }) => greigeStockService.fetchSummary(unit, { search }, signal),
-    enabled: query.isSuccess && !hasServerSummary && !emptyReport,
-    staleTime: 5 * 60_000,
-    gcTime: 15 * 60_000,
-    refetchOnWindowFocus: false,
-    retry: false,
-  });
-
-  const summary = query.data?.summary ??
-    (emptyReport ? EMPTY_SUMMARY : summaryQuery.data);
-  // Total qualities are already present in the page response, so we can show
-  // this count immediately without waiting for background KPI aggregation.
-  const qualities = query.isSuccess
-    ? Number(pagination?.totalEntries ?? summary?.qualities ?? 0)
-    : '—';
   const unavailable = query.isPending || query.isError || !summary;
   const columns = unit === 'u3' ? u3Columns : u2Columns;
 
@@ -171,22 +146,11 @@ export default function GreigeStockPage() {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label={unit === 'u3' ? 'Closing stock (KG)' : 'Total reported stock'} value={unavailable ? '—' : formatNumber(summary.totalStock, unit === 'u3' ? 2 : 0)} tone="primary" />
-        <Stat label="Qualities" value={qualities} />
+        <Stat label="Qualities" value={unavailable ? '—' : summary.qualities} />
         <Stat label="Out of Stock" value={unavailable ? '—' : summary.outOfStock} tone="accent" />
         <Stat label={unit === 'u3' ? 'Below 500 KG' : 'Below 500 (reported unit)'} value={unavailable ? '—' : summary.below500} />
       </div>
 
-      {query.isSuccess && !summary && summaryQuery.isFetching && (
-        <p role="status" className="text-xs text-muted-foreground">
-          Calculating KPIs across all {Number(pagination?.totalEntries || 0).toLocaleString('en-IN')} stock records…
-        </p>
-      )}
-      {query.isSuccess && !summary && summaryQuery.isError && (
-        <p role="alert" className="text-sm text-red-600">
-          Could not calculate stock KPIs: {errorMessage(summaryQuery.error)}{' '}
-          <Button variant="outline" size="sm" onClick={() => summaryQuery.refetch()}>Retry KPIs</Button>
-        </p>
-      )}
       {exportError && <p role="alert" className="text-sm text-red-600">Export failed: {exportError}</p>}
       <DataTable
         key={unit}
@@ -198,6 +162,8 @@ export default function GreigeStockPage() {
         error={query.isError ? errorMessage(query.error) : null}
         onRetry={() => query.refetch()}
         searchable={false}
+        serverSort={sort}
+        onServerSortChange={(newSort) => { setSort(newSort); setPage(1); }}
         serverPagination={{
           pagination,
           disabled: query.isFetching,
@@ -218,6 +184,7 @@ export default function GreigeStockPage() {
               onChange={(event) => {
                 setUnit(event.target.value);
                 setPage(1);
+                setSort(null);
                 setSearch('');
                 setSearchInput('');
               }}

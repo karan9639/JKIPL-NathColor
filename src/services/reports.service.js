@@ -68,6 +68,17 @@ function asRows(response) {
     return [];
 }
 
+export function mapLastUpdatedRows(apiRows) {
+    return asRows(apiRows).map((row) => {
+        const source = String(row.source ?? row.Source ?? '').trim();
+        const details = LUD_DETAILS[source.toUpperCase()] ?? { owner: '—', remarks: '—' };
+        return {
+            Report: source, LUD: row.lastUpdatedAt ?? row.LUD ?? null,
+            USERNAME: row.importedBy ?? '—', REMARKS: details.remarks,
+        };
+    });
+}
+
 export const reportsService = {
     async greigeRequisitionSummary() {
         const { data } = await legacyHttp.get('/griegereqsummary');
@@ -80,29 +91,9 @@ export const reportsService = {
     },
 
     // LUD data comes dynamically from the backend
-    async lud() {
-        const { data } = await http.get('/user/fetch-last-updated');
+    async lud({ signal } = {}) {
+        const { data } = await http.get('/user/fetch-last-updated', { signal });
 
-        const apiRows = asRows(data);
-
-        return apiRows.map((row) => {
-            const source = String(
-                row.source ?? row.Source ?? ''
-            ).trim();
-
-            const sourceKey = source.toUpperCase();
-
-            const details = LUD_DETAILS[sourceKey] ?? {
-                owner: '—',
-                remarks: '—',
-            };
-
-            return {
-                Report: source,
-                LUD: row.lastUpdatedAt ?? row.LUD ?? null,
-                USERNAME: row.importedBy ?? '—',
-                REMARKS: details.remarks,
-            };
-        });
+        return mapLastUpdatedRows(data);
     },
 };

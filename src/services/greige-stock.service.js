@@ -1,6 +1,5 @@
 import { loadAllStockPages } from './stock-pagination.js';
 import { http } from '@/services/http/client';
-import { loadGreigeSummary } from '@/utils/greige-stock-summary';
 
 function extractRows(response, keys) {
     const payload = response?.data ?? response;
@@ -102,11 +101,11 @@ export const greigeStockService = {
     fetchAllU2: () => loadAllStockPages((params) => http.get('/u2greige/fetch-stock', {params})),
     fetchAllU3: () => loadAllStockPages((params) => http.get('/u3greige/fetch-stock', {params})),
     // One HTTP request for exactly the server page selected in Greige Stock.
-    async fetchPage(unit, { page = 1, limit = 50, search = '' } = {}, signal) {
+    async fetchPage(unit, { page = 1, limit = 50, search = '', sortBy, sortDir } = {}, signal) {
         if (unit !== 'u2' && unit !== 'u3') throw new Error('Invalid greige stock unit.');
         const path = unit === 'u3' ? '/u3greige/fetch-stock' : '/u2greige/fetch-stock';
         const { data } = await http.get(path, {
-            params: { page, limit, ...(search.trim() ? { search: search.trim() } : {}) },
+            params: { page, limit, ...(search.trim() ? { search: search.trim() } : {}), ...(sortBy ? { sortBy, sortDir } : {}) },
             signal,
         });
         const payload = data?.data ?? data;
@@ -118,15 +117,6 @@ export const greigeStockService = {
             pagination: payload.pagination,
             summary: payload.summary ?? null,
         };
-    },
-    // Existing Railway API returns pagination + stocks without KPI summaries.
-    // Load its 100-row pages once per filter, while the DataTable keeps limit=50.
-    fetchSummary(unit, { search = '' } = {}, signal) {
-        return loadGreigeSummary(
-            (params) => this.fetchPage(unit, params, signal),
-            unit,
-            { search },
-        );
     },
     async fetchU2(params = {}) {
         const { data } = await http.get('/u2greige/fetch-stock', { params });

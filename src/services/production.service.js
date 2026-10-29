@@ -35,8 +35,8 @@ export const productionService = {
         }
         return payload;
     },
-    async records() {
-        const { data } = await legacyHttp.get('/vrecords');
+    async records({ signal } = {}) {
+        const { data } = await legacyHttp.get('/vrecords', { signal });
         return asRows(data);
     },
 };

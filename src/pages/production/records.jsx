@@ -18,7 +18,7 @@ const columns = [
     ...KEYS.map(([key, label]) => ({ key, label, align: 'right' })),
 ];
 export default function RecordsPage() {
-    const query = useQuery({ queryKey: ['records'], queryFn: productionService.records });
+    const query = useQuery({ queryKey: ['records'], queryFn: ({ signal }) => productionService.records({ signal }), staleTime: 30_000 });
     const rows = query.data ?? [];
     return (<>
       <PageHeader title="Daily Records" description="Number of entries recorded per production stage each day."/>

@@ -5,8 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
 import { ArrowRight } from 'lucide-react';
-import { productionService } from '@/services/production.service';
-import { reportsService } from '@/services/reports.service';
+import { dashboardService } from '@/services/dashboard.service';
 import { useAuth } from '@/hooks/useAuth';
 import { NAV_GROUPS } from '@/constants/navigation';
 import { formatDate, parseLooseDate, toNumber } from '@/utils/format';
@@ -30,8 +29,13 @@ function freshness(value) {
 }
 export default function DashboardPage() {
     const { username, user, can } = useAuth();
-    const records = useQuery({ queryKey: ['records'], queryFn: productionService.records });
-    const lud = useQuery({ queryKey: ['lud'], queryFn: reportsService.lud });
+    const overview = useQuery({
+        queryKey: ['dashboard-overview'],
+        queryFn: ({ signal }) => dashboardService.overview({ signal }),
+        staleTime: 30_000,
+    });
+    const records = { ...overview, data: overview.data?.records };
+    const lud = { ...overview, data: overview.data?.lud };
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
     const rows = useMemo(() => [...(records.data ?? [])].filter(row => {

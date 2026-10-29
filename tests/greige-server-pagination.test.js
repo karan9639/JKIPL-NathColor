@@ -10,9 +10,10 @@ test('Greige Stock fetches a single backend page matching its 50-row default', (
   assert.match(page, /\[limit, setLimit\] = useState\(50\)/);
   assert.match(page, /queryFn:\s*\(\{ signal \}\) => fetchStockPage\(unit, params, signal\)/);
   assert.match(page, /serverPagination=\{\{/);
+  assert.match(page, /onServerSortChange=/);
   assert.match(page, /onPageSizeChange:\s*\(nextLimit\)/);
   assert.match(page, /searchable=\{false\}/);
-  assert.match(service, /async fetchPage\(unit, \{ page = 1, limit = 50, search = '' \} = \{\}, signal\)/);
+  assert.match(service, /async fetchPage\(unit, \{ page = 1, limit = 50, search = '', sortBy, sortDir \} = \{\}, signal\)/);
   assert.match(service, /params:\s*\{ page, limit,/);
   // Bulk download can still be triggered explicitly by Export all.
   assert.match(page, /async function exportAll\(\)/);
