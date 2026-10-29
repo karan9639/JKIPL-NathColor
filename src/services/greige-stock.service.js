@@ -100,6 +100,24 @@ function normalizeU3Stocks(stocks) {
 export const greigeStockService = {
     fetchAllU2: () => loadAllStockPages((params) => http.get('/u2greige/fetch-stock', {params})),
     fetchAllU3: () => loadAllStockPages((params) => http.get('/u3greige/fetch-stock', {params})),
+    // One HTTP request for exactly the server page selected in Greige Stock.
+    async fetchPage(unit, { page = 1, limit = 50, search = '' } = {}, signal) {
+        if (unit !== 'u2' && unit !== 'u3') throw new Error('Invalid greige stock unit.');
+        const path = unit === 'u3' ? '/u3greige/fetch-stock' : '/u2greige/fetch-stock';
+        const { data } = await http.get(path, {
+            params: { page, limit, ...(search.trim() ? { search: search.trim() } : {}) },
+            signal,
+        });
+        const payload = data?.data ?? data;
+        if (!Array.isArray(payload?.stocks) || !payload?.pagination) {
+            throw new Error('Unexpected greige stock API response. Expected stocks and pagination.');
+        }
+        return {
+            rows: payload.stocks,
+            pagination: payload.pagination,
+            summary: payload.summary ?? null,
+        };
+    },
     async fetchU2(params = {}) {
         const { data } = await http.get('/u2greige/fetch-stock', { params });
         return extractRows(data, ['u2GreigeStocks', 'u2GreigeStock', 'greigeStocks', 'greigeStock', 'stocks', 'records', 'rows', 'items']);
