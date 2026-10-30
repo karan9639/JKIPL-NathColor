@@ -73,8 +73,10 @@ export function mapLastUpdatedRows(apiRows) {
         const source = String(row.source ?? row.Source ?? '').trim();
         const details = LUD_DETAILS[source.toUpperCase()] ?? { owner: '—', remarks: '—' };
         return {
-            Report: source, LUD: row.lastUpdatedAt ?? row.LUD ?? null,
-            USERNAME: row.importedBy ?? '—', REMARKS: details.remarks,
+          Report: source,
+          LUD: row.lastUpdatedAt ?? row.LUD ?? null,
+          USERNAME: row.importedBy ?? "—",
+          REMARKS: row.count + " updated items",
         };
     });
 }
