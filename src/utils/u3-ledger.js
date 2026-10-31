@@ -17,11 +17,21 @@ const dateAt = (cells, i, rowNo) => {
 };
 export function normalizeU3GreigeSheet(table) {
   if (!Array.isArray(table) || !table.length) throw new Error('Greige U-1 ledger workbook is empty');
-  const headerIndex = table.findIndex(r => Array.isArray(r) && same(r[0], 'Item Name') && same(r[1], 'UOM') && same(r[4], 'Receipt') && same(r[8], 'Closing'));
-  if (headerIndex < 0) throw new Error('Expected ERP ledger headers Item Name, UOM, Receipt and Closing in columns A, B, E, I.');
+  // Two verified exports of this same ERP ledger use different merged-header anchors:
+  // 256947.xlsx places the Closing heading in I, while 295.xlsx places it in J.
+  // Importantly, the actual 14-column data schema does NOT move: Closing Qty
+  // and Closing Qty Kgs still occupy I and J in both exports.
+  const isLedgerHeader = (r) => Array.isArray(r)
+    && same(r[0], 'Item Name')
+    && same(r[1], 'UOM')
+    && same(r[4], 'Receipt')
+    && same(r[7], 'Issue')
+    && (same(r[8], 'Closing') || same(r[9], 'Closing'));
+  const headerIndex = table.findIndex(isLedgerHeader);
+  if (headerIndex < 0) throw new Error('Expected ERP stock ledger headers: Item Name (A), UOM (B), Receipt (E), Issue (H), Closing (I or J).');
   const sub = table[headerIndex + 2] ?? [];
-  if (!same(sub[5], 'Qty Kgs') || !same(sub[7], 'Qty Kgs') || !same(sub[9], 'Qty Kgs') || !same(sub[10], 'Date') || !same(sub[12], 'Date')) {
-    throw new Error('Unexpected U-1 ledger layout: required Qty Kgs / Date columns on the second header row (Excel row 5).');
+  if (!same(sub[4], 'Qty') || !same(sub[5], 'Qty Kgs') || !same(sub[6], 'Qty') || !same(sub[7], 'Qty Kgs') || !same(sub[8], 'Qty') || !same(sub[9], 'Qty Kgs') || !same(sub[10], 'Date') || !same(sub[11], 'Qty Kgs') || !same(sub[12], 'Date') || !same(sub[13], 'Qty Kgs')) {
+    throw new Error('Unexpected U-1 ledger subheaders. Expected Receipt Qty/Kgs (E-F), Issue Qty/Kgs (G-H), Closing Qty/Kgs (I-J), Last Received Date/Kgs (K-L) and Last Issue Date/Kgs (M-N).');
   }
   const out=[];const identities=new Map();const skipped=[];
   table.forEach((r,idx)=>{

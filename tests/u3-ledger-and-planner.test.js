@@ -8,6 +8,20 @@ const header=()=>{
 };
 const labels=()=>{const a=blank();a[4]='Qty';a[5]='Qty Kgs';a[6]='Qty';a[7]='Qty Kgs';a[8]='Qty';a[9]='Qty Kgs';a[10]='Date';a[11]='Qty Kgs';a[12]='Date';a[13]='Qty Kgs';return a;};
 const ledger=(item='DRYLEX FABRIC 200G 84W')=>[item,'KGS',0,0,10883.1,10883.1,9326.9,9326.9,1556.2,1556.2,'13-OCT-26',372,'21-SEP-26',1815];
+test('ERP U3 accepts new 295 export with Closing anchor in J, without shifting stock values',()=>{
+ const shifted = header();shifted[8]='';shifted[9]='Closing';
+ const data = normalizeU3GreigeSheet([blank(),blank(),shifted,blank(),labels(),ledger()]);
+ assert.equal(data.length,1);
+ assert.equal(data[0].receipt.qtyKgs,10883.1);
+ assert.equal(data[0].issue.qtyKgs,9326.9);
+ assert.equal(data[0].closing.qty,1556.2);
+ assert.equal(data[0].closing.qtyKgs,1556.2);
+ assert.equal(data[0].lastReceived.date,'2026-10-13');
+});
+test('ERP U3 rejects shifted quantity subheaders instead of corrupting values',()=>{
+ const shifted = labels();shifted[9]='';shifted[10]='Qty Kgs';
+ assert.throws(()=>normalizeU3GreigeSheet([blank(),blank(),header(),blank(),shifted,ledger()]),/Unexpected U-1 ledger subheaders/);
+});
 test('ERP U3 (ERP U1) ledger retains exact closing KG and dates',()=>{
  const data=normalizeU3GreigeSheet([blank(),blank(),header(),blank(),labels(),ledger()]);
  assert.equal(data.length,1);assert.equal(data[0].closing.qtyKgs,1556.2);assert.equal(data[0].receipt.qty,10883.1);
